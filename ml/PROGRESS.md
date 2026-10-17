@@ -1,5 +1,27 @@
 # ML workstream — running progress note
 
+## 2026-10-17 16:05 EDT — verified on IBM LinuxONE (s390x, RHEL 9.8, Podman)
+
+The full pipeline ran **inside IBM's `jupyterlab-image-s390x` container** on the team VM. Evidence is in
+`reports/linuxone/` (`run_manifest_s390x.json`, `RESULTS.md`). The VM run used today's data.
+
+- **Platform:** `machine: s390x`, `byteorder: big`, `Linux-5.14.0-687.58.1.el9_8.s390x`, Python 3.12.15. Packages
+  are identical to the local pins (numpy 2.0.2, pandas 3.0.6, scikit-learn 1.9.0, xgboost 3.4.1).
+- **Tests on the VM:** 8 passed, including the cross-architecture parity test ("parity on big-endian vs fixture from
+  arm64").
+- **Evaluation on s390x** (226 s):
+  - Cycle-9 PR-AUC 0.451 vs rule 0.358 (+0.092, CI +0.079 to +0.105).
+  - P@500 0.660 vs 0.560.
+  - This matches the laptop run (0.454) within data-refresh noise.
+- **Training + scoring on s390x** (39.5 s): model `f12061750b25f7a4` (242 rounds) was trained on the VM and scored
+  13,650 pending buildings. Same-vantage backtest PR-AUC 0.466.
+- **Live API on the VM**, bound to 127.0.0.1 and reached over an SSH tunnel:
+  - `/health` returns `s390x`/`big` and 16,514 buildings.
+  - `POST /score/2021985` returns probability 0.756 with per-feature TreeSHAP contributions. `inference_ms` is 97 on
+    s390x.
+- **CPU features include `nnpa`**, IBM Z's on-chip AI accelerator. **It is not used yet**, so we claim nothing about
+  acceleration. A possible stretch goal is Snap ML NNPA inference, but only with verified `zdnn_tensors` evidence.
+
 ## 2026-10-17 13:20 EDT — Step 2: extra sources help; deployed model = façade + DOB + ECB + building attributes
 
 **Ablation.** Same cycle-9 test, paired bootstrap against façade-only (`reports/ABLATION.md`):
