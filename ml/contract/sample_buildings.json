@@ -1,16 +1,16 @@
 {
   "meta": {
-    "generated_at": "2026-10-17T17:07:03.957564+00:00",
+    "generated_at": "2026-10-17T22:30:26.042354+00:00",
     "as_of": "2026-10-17",
     "label": "Probability that the building's next Initial FISP filing (cycle 10) records an UNSAFE fa\u00e7ade",
     "model": {
-      "model_sha256": "4537262a00e11793",
+      "model_sha256": "7466a264b5ba6762",
       "train_cycles": [
         7,
         8,
         9
       ],
-      "xgb_rounds": 273
+      "xgb_rounds": 248
     },
     "tiers": "rank percentile among pending buildings: high \u22645%, elevated \u226420%, typical \u226460%, low otherwise",
     "caveats": [
@@ -21,16 +21,16 @@
   },
   "buildings": [
     {
-      "bin": "3332220",
-      "bbl": "3005380001",
-      "address": "624 CLINTON STREET",
-      "borough": "Brooklyn",
-      "lat": 40.6751972,
-      "lon": -74.004683,
+      "bin": "4455435",
+      "bbl": "4067920030",
+      "address": "67-43 KISSENA BOULEVARD",
+      "borough": "Queens",
+      "lat": 40.7342714,
+      "lon": -73.8126097,
       "fisp": {
-        "subcycle": "B",
+        "subcycle": "C",
         "current_cycle": 10,
-        "filing_window_closes": "2028-02-21",
+        "filing_window_closes": "2029-02-21",
         "status_on_record": "UNSAFE",
         "current_cycle_filed": false,
         "current_cycle_status": null,
@@ -38,34 +38,29 @@
           {
             "cycle": 6,
             "status": "UNSAFE",
-            "filed_on": "2010-02-22"
+            "filed_on": "2008-04-30"
           },
           {
             "cycle": 7,
-            "status": "UNSAFE",
-            "filed_on": "2013-09-16"
+            "status": "SWARMP",
+            "filed_on": "2012-12-04"
           },
           {
             "cycle": 8,
             "status": "UNSAFE",
-            "filed_on": "2019-12-16"
-          },
-          {
-            "cycle": 9,
-            "status": "UNSAFE",
-            "filed_on": "2024-10-10"
+            "filed_on": "2020-01-24"
           }
         ]
       },
       "prediction": {
         "target": "Probability that the building's next Initial FISP filing (cycle 10) records an UNSAFE fa\u00e7ade",
-        "probability": 0.9346,
+        "probability": 0.9163,
         "rank": 1,
         "of": 13659,
         "percentile": 0.0001,
         "tier": "high",
-        "model_version": "4537262a00e11793",
-        "scored_at": "2026-10-17T17:06:59.948003+00:00",
+        "model_version": "7466a264b5ba6762",
+        "scored_at": "2026-10-17T22:30:21.840037+00:00",
         "scored_on": {
           "machine": "arm64",
           "byteorder": "little"
@@ -73,25 +68,25 @@
       },
       "drivers": [
         {
+          "feature": "lot_area",
+          "label": "Tax-lot size, sq ft (very large = multi-building development)",
+          "value": "1,374,000",
+          "effect": "raises",
+          "log_odds": 1.052
+        },
+        {
           "feature": "status_at_cutoff",
           "label": "Status on record now",
           "value": "UNSAFE",
           "effect": "raises",
-          "log_odds": 1.073
-        },
-        {
-          "feature": "lot_area",
-          "label": "Tax-lot size, sq ft (very large = multi-building development)",
-          "value": "1,079,791",
-          "effect": "raises",
-          "log_odds": 0.956
+          "log_odds": 0.998
         },
         {
           "feature": "dob_facade_ever",
           "label": "DOB violations (fa\u00e7ade / Local Law 11), all prior",
           "value": "5",
           "effect": "raises",
-          "log_odds": 0.346
+          "log_odds": 0.421
         }
       ],
       "provenance": {
@@ -143,13 +138,13 @@
       },
       "prediction": {
         "target": "Probability that the building's next Initial FISP filing (cycle 10) records an UNSAFE fa\u00e7ade",
-        "probability": 0.9339,
+        "probability": 0.9143,
         "rank": 2,
         "of": 13659,
         "percentile": 0.0001,
         "tier": "high",
-        "model_version": "4537262a00e11793",
-        "scored_at": "2026-10-17T17:06:59.948003+00:00",
+        "model_version": "7466a264b5ba6762",
+        "scored_at": "2026-10-17T22:30:21.840037+00:00",
         "scored_on": {
           "machine": "arm64",
           "byteorder": "little"
@@ -161,21 +156,105 @@
           "label": "Status on record now",
           "value": "UNSAFE",
           "effect": "raises",
-          "log_odds": 1.069
+          "log_odds": 1.066
         },
         {
           "feature": "lot_area",
           "label": "Tax-lot size, sq ft (very large = multi-building development)",
           "value": "1,079,791",
           "effect": "raises",
-          "log_odds": 0.943
+          "log_odds": 0.828
         },
         {
           "feature": "dob_facade_ever",
           "label": "DOB violations (fa\u00e7ade / Local Law 11), all prior",
           "value": "4",
           "effect": "raises",
-          "log_odds": 0.35
+          "log_odds": 0.371
+        }
+      ],
+      "provenance": {
+        "facades": {
+          "dataset": "xubg-57si",
+          "rows_updated_at": "2026-10-16T17:31:17+00:00",
+          "fetched_at": "2026-10-17T16:28:56.490864+00:00"
+        },
+        "location": "NYC PLUTO (64uk-42ks) lot centroid"
+      },
+      "missing": []
+    },
+    {
+      "bin": "3332220",
+      "bbl": "3005380001",
+      "address": "624 CLINTON STREET",
+      "borough": "Brooklyn",
+      "lat": 40.6751972,
+      "lon": -74.004683,
+      "fisp": {
+        "subcycle": "B",
+        "current_cycle": 10,
+        "filing_window_closes": "2028-02-21",
+        "status_on_record": "UNSAFE",
+        "current_cycle_filed": false,
+        "current_cycle_status": null,
+        "history": [
+          {
+            "cycle": 6,
+            "status": "UNSAFE",
+            "filed_on": "2010-02-22"
+          },
+          {
+            "cycle": 7,
+            "status": "UNSAFE",
+            "filed_on": "2013-09-16"
+          },
+          {
+            "cycle": 8,
+            "status": "UNSAFE",
+            "filed_on": "2019-12-16"
+          },
+          {
+            "cycle": 9,
+            "status": "UNSAFE",
+            "filed_on": "2024-10-10"
+          }
+        ]
+      },
+      "prediction": {
+        "target": "Probability that the building's next Initial FISP filing (cycle 10) records an UNSAFE fa\u00e7ade",
+        "probability": 0.912,
+        "rank": 3,
+        "of": 13659,
+        "percentile": 0.0002,
+        "tier": "high",
+        "model_version": "7466a264b5ba6762",
+        "scored_at": "2026-10-17T22:30:21.840037+00:00",
+        "scored_on": {
+          "machine": "arm64",
+          "byteorder": "little"
+        }
+      },
+      "drivers": [
+        {
+          "feature": "status_at_cutoff",
+          "label": "Status on record now",
+          "value": "UNSAFE",
+          "effect": "raises",
+          "log_odds": 1.057
+        },
+        {
+          "feature": "lot_area",
+          "label": "Tax-lot size, sq ft (very large = multi-building development)",
+          "value": "1,079,791",
+          "effect": "raises",
+          "log_odds": 0.825
+        },
+        {
+          "feature": "dob_facade_ever",
+          "label": "DOB violations (fa\u00e7ade / Local Law 11), all prior",
+          "value": "5",
+          "effect": "raises",
+          "log_odds": 0.384
         }
       ],
       "provenance": {
@@ -227,13 +306,13 @@
       },
       "prediction": {
         "target": "Probability that the building's next Initial FISP filing (cycle 10) records an UNSAFE fa\u00e7ade",
-        "probability": 0.9337,
-        "rank": 3,
+        "probability": 0.9115,
+        "rank": 4,
         "of": 13659,
-        "percentile": 0.0002,
+        "percentile": 0.0003,
         "tier": "high",
-        "model_version": "4537262a00e11793",
-        "scored_at": "2026-10-17T17:06:59.948003+00:00",
+        "model_version": "7466a264b5ba6762",
+        "scored_at": "2026-10-17T22:30:21.840037+00:00",
         "scored_on": {
           "machine": "arm64",
           "byteorder": "little"
@@ -245,21 +324,21 @@
           "label": "Status on record now",
           "value": "UNSAFE",
           "effect": "raises",
-          "log_odds": 1.066
+          "log_odds": 1.061
         },
         {
           "feature": "lot_area",
           "label": "Tax-lot size, sq ft (very large = multi-building development)",
           "value": "1,079,791",
           "effect": "raises",
-          "log_odds": 0.962
+          "log_odds": 0.845
         },
         {
           "feature": "dob_facade_ever",
           "label": "DOB violations (fa\u00e7ade / Local Law 11), all prior",
           "value": "3",
           "effect": "raises",
-          "log_odds": 0.333
+          "log_odds": 0.344
         }
       ],
       "provenance": {
@@ -273,16 +352,16 @@
       "missing": []
     },
     {
-      "bin": "3332218",
-      "bbl": "3005380001",
-      "address": "93 CENTRE MALL",
+      "bin": "3337023",
+      "bbl": "3042920061",
+      "address": "335 FOUNTAIN AVENUE",
       "borough": "Brooklyn",
-      "lat": 40.6751972,
-      "lon": -74.004683,
+      "lat": 40.6721347,
+      "lon": -73.8723308,
       "fisp": {
-        "subcycle": "B",
+        "subcycle": "C",
         "current_cycle": 10,
-        "filing_window_closes": "2028-02-21",
+        "filing_window_closes": "2029-02-21",
         "status_on_record": "UNSAFE",
         "current_cycle_filed": false,
         "current_cycle_status": null,
@@ -290,34 +369,34 @@
           {
             "cycle": 6,
             "status": "UNSAFE",
-            "filed_on": "2010-02-22"
+            "filed_on": "2013-09-05"
           },
           {
             "cycle": 7,
             "status": "UNSAFE",
-            "filed_on": "2013-09-16"
+            "filed_on": "2013-09-05"
           },
           {
             "cycle": 8,
-            "status": "UNSAFE",
-            "filed_on": "2019-12-16"
+            "status": "SWARMP",
+            "filed_on": "2019-11-07"
           },
           {
             "cycle": 9,
             "status": "UNSAFE",
-            "filed_on": "2024-10-10"
+            "filed_on": "2024-08-29"
           }
         ]
       },
       "prediction": {
         "target": "Probability that the building's next Initial FISP filing (cycle 10) records an UNSAFE fa\u00e7ade",
-        "probability": 0.9333,
-        "rank": 4,
+        "probability": 0.9112,
+        "rank": 5,
         "of": 13659,
-        "percentile": 0.0003,
+        "percentile": 0.0004,
         "tier": "high",
-        "model_version": "4537262a00e11793",
-        "scored_at": "2026-10-17T17:06:59.948003+00:00",
+        "model_version": "7466a264b5ba6762",
+        "scored_at": "2026-10-17T22:30:21.840037+00:00",
         "scored_on": {
           "machine": "arm64",
           "byteorder": "little"
@@ -325,25 +404,25 @@
       },
       "drivers": [
         {
+          "feature": "lot_area",
+          "label": "Tax-lot size, sq ft (very large = multi-building development)",
+          "value": "1,317,803",
+          "effect": "raises",
+          "log_odds": 1.009
+        },
+        {
           "feature": "status_at_cutoff",
           "label": "Status on record now",
           "value": "UNSAFE",
           "effect": "raises",
-          "log_odds": 1.068
-        },
-        {
-          "feature": "lot_area",
-          "label": "Tax-lot size, sq ft (very large = multi-building development)",
-          "value": "1,079,791",
-          "effect": "raises",
-          "log_odds": 0.947
+          "log_odds": 0.986
         },
         {
           "feature": "dob_facade_ever",
           "label": "DOB violations (fa\u00e7ade / Local Law 11), all prior",
           "value": "5",
           "effect": "raises",
-          "log_odds": 0.346
+          "log_odds": 0.4
         }
       ],
       "provenance": {
@@ -357,16 +436,16 @@
       "missing": []
     },
     {
-      "bin": "3332216",
-      "bbl": "3005380001",
-      "address": "31 CENTRE MALL",
+      "bin": "3337037",
+      "bbl": "3042920061",
+      "address": "385 FOUNTAIN AVENUE",
       "borough": "Brooklyn",
-      "lat": 40.6751972,
-      "lon": -74.004683,
+      "lat": 40.6721347,
+      "lon": -73.8723308,
       "fisp": {
-        "subcycle": "B",
+        "subcycle": "C",
         "current_cycle": 10,
-        "filing_window_closes": "2028-02-21",
+        "filing_window_closes": "2029-02-21",
         "status_on_record": "UNSAFE",
         "current_cycle_filed": false,
         "current_cycle_status": null,
@@ -374,34 +453,34 @@
           {
             "cycle": 6,
             "status": "UNSAFE",
-            "filed_on": "2013-09-20"
+            "filed_on": "2013-09-05"
           },
           {
             "cycle": 7,
             "status": "UNSAFE",
-            "filed_on": "2013-09-20"
+            "filed_on": "2013-09-05"
           },
           {
             "cycle": 8,
-            "status": "UNSAFE",
-            "filed_on": "2020-02-19"
+            "status": "SWARMP",
+            "filed_on": "2019-11-25"
           },
           {
             "cycle": 9,
             "status": "UNSAFE",
-            "filed_on": "2025-02-19"
+            "filed_on": "2024-08-29"
           }
         ]
       },
       "prediction": {
         "target": "Probability that the building's next Initial FISP filing (cycle 10) records an UNSAFE fa\u00e7ade",
-        "probability": 0.9316,
-        "rank": 5,
+        "probability": 0.9112,
+        "rank": 6,
         "of": 13659,
         "percentile": 0.0004,
         "tier": "high",
-        "model_version": "4537262a00e11793",
-        "scored_at": "2026-10-17T17:06:59.948003+00:00",
+        "model_version": "7466a264b5ba6762",
+        "scored_at": "2026-10-17T22:30:21.840037+00:00",
         "scored_on": {
           "machine": "arm64",
           "byteorder": "little"
@@ -409,25 +488,25 @@
       },
       "drivers": [
         {
+          "feature": "lot_area",
+          "label": "Tax-lot size, sq ft (very large = multi-building development)",
+          "value": "1,317,803",
+          "effect": "raises",
+          "log_odds": 1.011
+        },
+        {
           "feature": "status_at_cutoff",
           "label": "Status on record now",
           "value": "UNSAFE",
           "effect": "raises",
-          "log_odds": 1.084
-        },
-        {
-          "feature": "lot_area",
-          "label": "Tax-lot size, sq ft (very large = multi-building development)",
-          "value": "1,079,791",
-          "effect": "raises",
-          "log_odds": 0.942
+          "log_odds": 0.994
         },
         {
           "feature": "dob_facade_ever",
           "label": "DOB violations (fa\u00e7ade / Local Law 11), all prior",
           "value": "4",
           "effect": "raises",
-          "log_odds": 0.35
+          "log_odds": 0.39
         }
       ],
       "provenance": {
@@ -441,77 +520,77 @@
       "missing": []
     },
     {
-      "bin": "3332069",
-      "bbl": "3005380001",
-      "address": "15 MILL STREET",
+      "bin": "3331430",
+      "bbl": "3083290225",
+      "address": "1590 EAST 102 STREET",
       "borough": "Brooklyn",
-      "lat": 40.6751972,
-      "lon": -74.004683,
+      "lat": 40.633335,
+      "lon": -73.8859734,
       "fisp": {
-        "subcycle": "B",
+        "subcycle": "A",
         "current_cycle": 10,
-        "filing_window_closes": "2028-02-21",
-        "status_on_record": "UNSAFE",
+        "filing_window_closes": "2027-02-21",
+        "status_on_record": "SAFE",
         "current_cycle_filed": false,
         "current_cycle_status": null,
         "history": [
           {
             "cycle": 6,
             "status": "UNSAFE",
-            "filed_on": "2008-07-11"
+            "filed_on": "2008-10-09"
           },
           {
             "cycle": 7,
-            "status": "UNSAFE",
-            "filed_on": "2013-09-20"
+            "status": "SWARMP",
+            "filed_on": "2013-04-24"
           },
           {
             "cycle": 8,
             "status": "UNSAFE",
-            "filed_on": "2020-02-19"
+            "filed_on": "2018-03-15"
           },
           {
             "cycle": 9,
             "status": "UNSAFE",
-            "filed_on": "2024-10-15"
+            "filed_on": "2022-02-18"
           }
         ]
       },
       "prediction": {
         "target": "Probability that the building's next Initial FISP filing (cycle 10) records an UNSAFE fa\u00e7ade",
-        "probability": 0.9314,
-        "rank": 6,
+        "probability": 0.7195,
+        "rank": 387,
         "of": 13659,
-        "percentile": 0.0004,
+        "percentile": 0.0283,
         "tier": "high",
-        "model_version": "4537262a00e11793",
-        "scored_at": "2026-10-17T17:06:59.948003+00:00",
+        "model_version": "7466a264b5ba6762",
+        "scored_at": "2026-10-17T22:30:21.840037+00:00",
         "scored_on": {
           "machine": "arm64",
           "byteorder": "little"
         }
       },
       "drivers": [
-        {
-          "feature": "status_at_cutoff",
-          "label": "Status on record now",
-          "value": "UNSAFE",
-          "effect": "raises",
-          "log_odds": 1.06
-        },
-        {
-          "feature": "lot_area",
-          "label": "Tax-lot size, sq ft (very large = multi-building development)",
-          "value": "1,079,791",
-          "effect": "raises",
-          "log_odds": 0.915
-        },
         {
           "feature": "dob_facade_ever",
           "label": "DOB violations (fa\u00e7ade / Local Law 11), all prior",
           "value": "6",
           "effect": "raises",
-          "log_odds": 0.34
+          "log_odds": 0.498
+        },
+        {
+          "feature": "lot_area",
+          "label": "Tax-lot size, sq ft (very large = multi-building development)",
+          "value": "1,410,820",
+          "effect": "raises",
+          "log_odds": 0.458
+        },
+        {
+          "feature": "status_at_cutoff",
+          "label": "Status on record now",
+          "value": "SAFE",
+          "effect": "lowers",
+          "log_odds": -0.371
         }
       ],
       "provenance": {
@@ -525,12 +604,12 @@
       "missing": []
     },
     {
-      "bin": "5109114",
-      "bbl": "5012450001",
-      "address": "20 ROXBURY STREET",
-      "borough": "Staten Island",
-      "lat": 40.6326607,
-      "lon": -74.1633516,
+      "bin": "3331443",
+      "bbl": "3083290225",
+      "address": "5985 SHORE PARKWAY",
+      "borough": "Brooklyn",
+      "lat": 40.633335,
+      "lon": -73.8859734,
       "fisp": {
         "subcycle": "A",
         "current_cycle": 10,
@@ -541,293 +620,61 @@
         "history": [
           {
             "cycle": 6,
+            "status": "UNSAFE",
+            "filed_on": "2008-10-09"
+          },
+          {
+            "cycle": 7,
             "status": "SWARMP",
-            "filed_on": "2008-06-03"
-          },
-          {
-            "cycle": 7,
-            "status": "UNSAFE",
-            "filed_on": "2013-09-03"
+            "filed_on": "2013-04-24"
           },
           {
             "cycle": 8,
-            "status": "SAFE",
-            "filed_on": "2016-09-30"
+            "status": "UNSAFE",
+            "filed_on": "2018-03-15"
+          },
+          {
+            "cycle": 9,
+            "status": "UNSAFE",
+            "filed_on": "2022-02-18"
           }
         ]
       },
       "prediction": {
         "target": "Probability that the building's next Initial FISP filing (cycle 10) records an UNSAFE fa\u00e7ade",
-        "probability": 0.7951,
-        "rank": 212,
+        "probability": 0.7186,
+        "rank": 392,
         "of": 13659,
-        "percentile": 0.0155,
+        "percentile": 0.0287,
         "tier": "high",
-        "model_version": "4537262a00e11793",
-        "scored_at": "2026-10-17T17:06:59.948003+00:00",
+        "model_version": "7466a264b5ba6762",
+        "scored_at": "2026-10-17T22:30:21.840037+00:00",
         "scored_on": {
           "machine": "arm64",
           "byteorder": "little"
         }
       },
       "drivers": [
-        {
-          "feature": "ecb_unsafe_measures_years_since",
-          "label": "ECB violations (unsafe-fa\u00e7ade enforcement): years since last",
-          "value": "0.2",
-          "effect": "raises",
-          "log_odds": 0.807
-        },
-        {
-          "feature": "lot_area",
-          "label": "Tax-lot size, sq ft (very large = multi-building development)",
-          "value": "453,475",
-          "effect": "raises",
-          "log_odds": 0.705
-        },
-        {
-          "feature": "years_since_last_filing",
-          "label": "Years since last fa\u00e7ade filing",
-          "value": "10.0",
-          "effect": "raises",
-          "log_odds": 0.51
-        }
-      ],
-      "provenance": {
-        "facades": {
-          "dataset": "xubg-57si",
-          "rows_updated_at": "2026-10-16T17:31:17+00:00",
-          "fetched_at": "2026-10-17T16:28:56.490864+00:00"
-        },
-        "location": "NYC PLUTO (64uk-42ks) lot centroid"
-      },
-      "missing": []
-    },
-    {
-      "bin": "3324599",
-      "bbl": "3013440001",
-      "address": "629 KINGSBOROUGH    6 WALK",
-      "borough": "Brooklyn",
-      "lat": 40.6754995,
-      "lon": -73.9250638,
-      "fisp": {
-        "subcycle": "A",
-        "current_cycle": 10,
-        "filing_window_closes": "2027-02-21",
-        "status_on_record": "SAFE",
-        "current_cycle_filed": false,
-        "current_cycle_status": null,
-        "history": [
-          {
-            "cycle": 6,
-            "status": "UNSAFE",
-            "filed_on": "2008-07-11"
-          },
-          {
-            "cycle": 7,
-            "status": "UNSAFE",
-            "filed_on": "2013-06-13"
-          },
-          {
-            "cycle": 8,
-            "status": "SAFE",
-            "filed_on": "2015-11-23"
-          }
-        ]
-      },
-      "prediction": {
-        "target": "Probability that the building's next Initial FISP filing (cycle 10) records an UNSAFE fa\u00e7ade",
-        "probability": 0.7942,
-        "rank": 215,
-        "of": 13659,
-        "percentile": 0.0157,
-        "tier": "high",
-        "model_version": "4537262a00e11793",
-        "scored_at": "2026-10-17T17:06:59.948003+00:00",
-        "scored_on": {
-          "machine": "arm64",
-          "byteorder": "little"
-        }
-      },
-      "drivers": [
-        {
-          "feature": "ecb_unsafe_measures_years_since",
-          "label": "ECB violations (unsafe-fa\u00e7ade enforcement): years since last",
-          "value": "0.1",
-          "effect": "raises",
-          "log_odds": 0.748
-        },
-        {
-          "feature": "lot_area",
-          "label": "Tax-lot size, sq ft (very large = multi-building development)",
-          "value": "432,500",
-          "effect": "raises",
-          "log_odds": 0.663
-        },
-        {
-          "feature": "years_since_last_filing",
-          "label": "Years since last fa\u00e7ade filing",
-          "value": "10.9",
-          "effect": "raises",
-          "log_odds": 0.477
-        }
-      ],
-      "provenance": {
-        "facades": {
-          "dataset": "xubg-57si",
-          "rows_updated_at": "2026-10-16T17:31:17+00:00",
-          "fetched_at": "2026-10-17T16:28:56.490864+00:00"
-        },
-        "location": "NYC PLUTO (64uk-42ks) lot centroid"
-      },
-      "missing": []
-    },
-    {
-      "bin": "3331187",
-      "bbl": "3013440001",
-      "address": "142 KINGSBOROUGH    1 WALK",
-      "borough": "Brooklyn",
-      "lat": 40.6754995,
-      "lon": -73.9250638,
-      "fisp": {
-        "subcycle": "A",
-        "current_cycle": 10,
-        "filing_window_closes": "2027-02-21",
-        "status_on_record": "SAFE",
-        "current_cycle_filed": false,
-        "current_cycle_status": null,
-        "history": [
-          {
-            "cycle": 6,
-            "status": "SWARMP",
-            "filed_on": "2007-10-30"
-          },
-          {
-            "cycle": 7,
-            "status": "UNSAFE",
-            "filed_on": "2013-05-24"
-          },
-          {
-            "cycle": 8,
-            "status": "SAFE",
-            "filed_on": "2015-11-23"
-          }
-        ]
-      },
-      "prediction": {
-        "target": "Probability that the building's next Initial FISP filing (cycle 10) records an UNSAFE fa\u00e7ade",
-        "probability": 0.7923,
-        "rank": 222,
-        "of": 13659,
-        "percentile": 0.0163,
-        "tier": "high",
-        "model_version": "4537262a00e11793",
-        "scored_at": "2026-10-17T17:06:59.948003+00:00",
-        "scored_on": {
-          "machine": "arm64",
-          "byteorder": "little"
-        }
-      },
-      "drivers": [
-        {
-          "feature": "ecb_unsafe_measures_years_since",
-          "label": "ECB violations (unsafe-fa\u00e7ade enforcement): years since last",
-          "value": "0.1",
-          "effect": "raises",
-          "log_odds": 0.816
-        },
-        {
-          "feature": "lot_area",
-          "label": "Tax-lot size, sq ft (very large = multi-building development)",
-          "value": "432,500",
-          "effect": "raises",
-          "log_odds": 0.671
-        },
-        {
-          "feature": "years_since_last_filing",
-          "label": "Years since last fa\u00e7ade filing",
-          "value": "10.9",
-          "effect": "raises",
-          "log_odds": 0.494
-        }
-      ],
-      "provenance": {
-        "facades": {
-          "dataset": "xubg-57si",
-          "rows_updated_at": "2026-10-16T17:31:17+00:00",
-          "fetched_at": "2026-10-17T16:28:56.490864+00:00"
-        },
-        "location": "NYC PLUTO (64uk-42ks) lot centroid"
-      },
-      "missing": []
-    },
-    {
-      "bin": "3331200",
-      "bbl": "3013440001",
-      "address": "529 KINGSBOROUGH    5 WALK",
-      "borough": "Brooklyn",
-      "lat": 40.6754995,
-      "lon": -73.9250638,
-      "fisp": {
-        "subcycle": "A",
-        "current_cycle": 10,
-        "filing_window_closes": "2027-02-21",
-        "status_on_record": "SAFE",
-        "current_cycle_filed": false,
-        "current_cycle_status": null,
-        "history": [
-          {
-            "cycle": 6,
-            "status": "UNSAFE",
-            "filed_on": "2008-06-03"
-          },
-          {
-            "cycle": 7,
-            "status": "UNSAFE",
-            "filed_on": "2013-06-13"
-          },
-          {
-            "cycle": 8,
-            "status": "SAFE",
-            "filed_on": "2015-11-23"
-          }
-        ]
-      },
-      "prediction": {
-        "target": "Probability that the building's next Initial FISP filing (cycle 10) records an UNSAFE fa\u00e7ade",
-        "probability": 0.7888,
-        "rank": 234,
-        "of": 13659,
-        "percentile": 0.0171,
-        "tier": "high",
-        "model_version": "4537262a00e11793",
-        "scored_at": "2026-10-17T17:06:59.948003+00:00",
-        "scored_on": {
-          "machine": "arm64",
-          "byteorder": "little"
-        }
-      },
-      "drivers": [
-        {
-          "feature": "ecb_unsafe_measures_years_since",
-          "label": "ECB violations (unsafe-fa\u00e7ade enforcement): years since last",
-          "value": "0.1",
-          "effect": "raises",
-          "log_odds": 0.757
-        },
-        {
-          "feature": "lot_area",
-          "label": "Tax-lot size, sq ft (very large = multi-building development)",
-          "value": "432,500",
-          "effect": "raises",
-          "log_odds": 0.655
-        },
         {
           "feature": "dob_facade_ever",
           "label": "DOB violations (fa\u00e7ade / Local Law 11), all prior",
-          "value": "5",
+          "value": "6",
           "effect": "raises",
-          "log_odds": 0.481
+          "log_odds": 0.528
+        },
+        {
+          "feature": "lot_area",
+          "label": "Tax-lot size, sq ft (very large = multi-building development)",
+          "value": "1,410,820",
+          "effect": "raises",
+          "log_odds": 0.472
+        },
+        {
+          "feature": "status_at_cutoff",
+          "label": "Status on record now",
+          "value": "SAFE",
+          "effect": "lowers",
+          "log_odds": -0.403
         }
       ],
       "provenance": {
@@ -841,16 +688,184 @@
       "missing": []
     },
     {
-      "bin": "1064270",
-      "bbl": "1021760054",
-      "address": "701 WEST 179TH STREET",
-      "borough": "Manhattan",
-      "lat": 40.8492189,
-      "lon": -73.9372985,
+      "bin": "3331419",
+      "bbl": "3083290225",
+      "address": "1530 EAST 102 STREET",
+      "borough": "Brooklyn",
+      "lat": 40.633335,
+      "lon": -73.8859734,
       "fisp": {
         "subcycle": "A",
         "current_cycle": 10,
         "filing_window_closes": "2027-02-21",
+        "status_on_record": "SAFE",
+        "current_cycle_filed": false,
+        "current_cycle_status": null,
+        "history": [
+          {
+            "cycle": 6,
+            "status": "UNSAFE",
+            "filed_on": "2008-10-09"
+          },
+          {
+            "cycle": 7,
+            "status": "SWARMP",
+            "filed_on": "2013-04-24"
+          },
+          {
+            "cycle": 8,
+            "status": "UNSAFE",
+            "filed_on": "2018-03-12"
+          },
+          {
+            "cycle": 9,
+            "status": "UNSAFE",
+            "filed_on": "2022-02-16"
+          }
+        ]
+      },
+      "prediction": {
+        "target": "Probability that the building's next Initial FISP filing (cycle 10) records an UNSAFE fa\u00e7ade",
+        "probability": 0.7094,
+        "rank": 419,
+        "of": 13659,
+        "percentile": 0.0307,
+        "tier": "high",
+        "model_version": "7466a264b5ba6762",
+        "scored_at": "2026-10-17T22:30:21.840037+00:00",
+        "scored_on": {
+          "machine": "arm64",
+          "byteorder": "little"
+        }
+      },
+      "drivers": [
+        {
+          "feature": "dob_facade_ever",
+          "label": "DOB violations (fa\u00e7ade / Local Law 11), all prior",
+          "value": "6",
+          "effect": "raises",
+          "log_odds": 0.497
+        },
+        {
+          "feature": "lot_area",
+          "label": "Tax-lot size, sq ft (very large = multi-building development)",
+          "value": "1,410,820",
+          "effect": "raises",
+          "log_odds": 0.463
+        },
+        {
+          "feature": "status_at_cutoff",
+          "label": "Status on record now",
+          "value": "SAFE",
+          "effect": "lowers",
+          "log_odds": -0.402
+        }
+      ],
+      "provenance": {
+        "facades": {
+          "dataset": "xubg-57si",
+          "rows_updated_at": "2026-10-16T17:31:17+00:00",
+          "fetched_at": "2026-10-17T16:28:56.490864+00:00"
+        },
+        "location": "NYC PLUTO (64uk-42ks) lot centroid"
+      },
+      "missing": []
+    },
+    {
+      "bin": "3331436",
+      "bbl": "3083290225",
+      "address": "2115 ROCKAWAY PARKWAY",
+      "borough": "Brooklyn",
+      "lat": 40.633335,
+      "lon": -73.8859734,
+      "fisp": {
+        "subcycle": "A",
+        "current_cycle": 10,
+        "filing_window_closes": "2027-02-21",
+        "status_on_record": "SAFE",
+        "current_cycle_filed": false,
+        "current_cycle_status": null,
+        "history": [
+          {
+            "cycle": 6,
+            "status": "UNSAFE",
+            "filed_on": "2008-10-09"
+          },
+          {
+            "cycle": 7,
+            "status": "SWARMP",
+            "filed_on": "2013-04-24"
+          },
+          {
+            "cycle": 8,
+            "status": "UNSAFE",
+            "filed_on": "2018-03-15"
+          },
+          {
+            "cycle": 9,
+            "status": "UNSAFE",
+            "filed_on": "2022-02-18"
+          }
+        ]
+      },
+      "prediction": {
+        "target": "Probability that the building's next Initial FISP filing (cycle 10) records an UNSAFE fa\u00e7ade",
+        "probability": 0.708,
+        "rank": 421,
+        "of": 13659,
+        "percentile": 0.0308,
+        "tier": "high",
+        "model_version": "7466a264b5ba6762",
+        "scored_at": "2026-10-17T22:30:21.840037+00:00",
+        "scored_on": {
+          "machine": "arm64",
+          "byteorder": "little"
+        }
+      },
+      "drivers": [
+        {
+          "feature": "dob_facade_ever",
+          "label": "DOB violations (fa\u00e7ade / Local Law 11), all prior",
+          "value": "6",
+          "effect": "raises",
+          "log_odds": 0.542
+        },
+        {
+          "feature": "lot_area",
+          "label": "Tax-lot size, sq ft (very large = multi-building development)",
+          "value": "1,410,820",
+          "effect": "raises",
+          "log_odds": 0.464
+        },
+        {
+          "feature": "status_at_cutoff",
+          "label": "Status on record now",
+          "value": "SAFE",
+          "effect": "lowers",
+          "log_odds": -0.375
+        }
+      ],
+      "provenance": {
+        "facades": {
+          "dataset": "xubg-57si",
+          "rows_updated_at": "2026-10-16T17:31:17+00:00",
+          "fetched_at": "2026-10-17T16:28:56.490864+00:00"
+        },
+        "location": "NYC PLUTO (64uk-42ks) lot centroid"
+      },
+      "missing": []
+    },
+    {
+      "bin": "4215614",
+      "bbl": "4101010003",
+      "address": "160-16 JAMAICA AVENUE",
+      "borough": "Queens",
+      "lat": 40.7035692,
+      "lon": -73.7984461,
+      "fisp": {
+        "subcycle": "C",
+        "current_cycle": 10,
+        "filing_window_closes": "2029-02-21",
         "status_on_record": "none on record",
         "current_cycle_filed": false,
         "current_cycle_status": null,
@@ -858,13 +873,13 @@
       },
       "prediction": {
         "target": "Probability that the building's next Initial FISP filing (cycle 10) records an UNSAFE fa\u00e7ade",
-        "probability": 0.5887,
-        "rank": 844,
+        "probability": 0.5086,
+        "rank": 1218,
         "of": 13659,
-        "percentile": 0.0618,
+        "percentile": 0.0892,
         "tier": "elevated",
-        "model_version": "4537262a00e11793",
-        "scored_at": "2026-10-17T17:06:59.948003+00:00",
+        "model_version": "7466a264b5ba6762",
+        "scored_at": "2026-10-17T22:30:21.840037+00:00",
         "scored_on": {
           "machine": "arm64",
           "byteorder": "little"
@@ -872,25 +887,25 @@
       },
       "drivers": [
         {
-          "feature": "ecb_wall_years_since",
-          "label": "ECB violations (failure to maintain walls): years since last",
-          "value": "0.0",
+          "feature": "dob_facade_ever",
+          "label": "DOB violations (fa\u00e7ade / Local Law 11), all prior",
+          "value": "4",
           "effect": "raises",
-          "log_odds": 0.574
+          "log_odds": 0.313
         },
         {
-          "feature": "years_since_last_filing",
-          "label": "Years since last fa\u00e7ade filing",
-          "value": "unknown",
+          "feature": "ecb_report_ever",
+          "label": "ECB violations (fa\u00e7ade report not filed), all prior",
+          "value": "10",
           "effect": "raises",
-          "log_odds": 0.37
+          "log_odds": 0.225
         },
         {
           "feature": "bldg_age",
           "label": "Building age (years)",
-          "value": "106",
+          "value": "104",
           "effect": "raises",
-          "log_odds": 0.274
+          "log_odds": 0.202
         }
       ],
       "provenance": {
@@ -923,13 +938,13 @@
       },
       "prediction": {
         "target": "Probability that the building's next Initial FISP filing (cycle 10) records an UNSAFE fa\u00e7ade",
-        "probability": 0.5834,
-        "rank": 879,
+        "probability": 0.5075,
+        "rank": 1223,
         "of": 13659,
-        "percentile": 0.0644,
+        "percentile": 0.0895,
         "tier": "elevated",
-        "model_version": "4537262a00e11793",
-        "scored_at": "2026-10-17T17:06:59.948003+00:00",
+        "model_version": "7466a264b5ba6762",
+        "scored_at": "2026-10-17T22:30:21.840037+00:00",
         "scored_on": {
           "machine": "arm64",
           "byteorder": "little"
@@ -937,25 +952,25 @@
       },
       "drivers": [
         {
-          "feature": "ecb_wall_years_since",
-          "label": "ECB violations (failure to maintain walls): years since last",
-          "value": "0.1",
-          "effect": "raises",
-          "log_odds": 0.389
-        },
-        {
-          "feature": "years_since_last_filing",
-          "label": "Years since last fa\u00e7ade filing",
-          "value": "unknown",
-          "effect": "raises",
-          "log_odds": 0.388
-        },
-        {
           "feature": "bldg_age",
           "label": "Building age (years)",
           "value": "106",
           "effect": "raises",
-          "log_odds": 0.233
+          "log_odds": 0.252
+        },
+        {
+          "feature": "ecb_wall_5y",
+          "label": "ECB violations (failure to maintain walls), past 5 years",
+          "value": "5",
+          "effect": "raises",
+          "log_odds": 0.203
+        },
+        {
+          "feature": "class_walkup_apts",
+          "label": "Building class: walkup apts",
+          "value": "yes",
+          "effect": "raises",
+          "log_odds": 0.185
         }
       ],
       "provenance": {
@@ -1167,9 +1182,9 @@
       "missing": []
     },
     {
-      "bin": "2096730",
+      "bin": "2096728",
       "bbl": "2039437501",
-      "address": "1555 ODELL STREET",
+      "address": "2121 ST RAYMOND AVENUE",
       "borough": "Bronx",
       "lat": 40.8386125,
       "lon": -73.8565255,
@@ -1177,102 +1192,18 @@
         "subcycle": "C",
         "current_cycle": 10,
         "filing_window_closes": "2029-02-21",
-        "status_on_record": "SWARMP",
+        "status_on_record": "SAFE",
         "current_cycle_filed": false,
         "current_cycle_status": null,
         "history": [
           {
             "cycle": 6,
             "status": "SAFE",
-            "filed_on": "2007-01-30"
+            "filed_on": "2007-02-09"
           },
           {
             "cycle": 7,
-            "status": "SAFE",
-            "filed_on": "2013-02-20"
-          },
-          {
-            "cycle": 8,
             "status": "SWARMP",
-            "filed_on": "2017-11-13"
-          },
-          {
-            "cycle": 9,
-            "status": "SWARMP",
-            "filed_on": "2023-12-12"
-          }
-        ]
-      },
-      "prediction": {
-        "target": "Probability that the building's next Initial FISP filing (cycle 10) records an UNSAFE fa\u00e7ade",
-        "probability": 0.0191,
-        "rank": 13657,
-        "of": 13659,
-        "percentile": 0.9999,
-        "tier": "low",
-        "model_version": "4537262a00e11793",
-        "scored_at": "2026-10-17T17:06:59.948003+00:00",
-        "scored_on": {
-          "machine": "arm64",
-          "byteorder": "little"
-        }
-      },
-      "drivers": [
-        {
-          "feature": "lot_area",
-          "label": "Tax-lot size, sq ft (very large = multi-building development)",
-          "value": "1,399,921",
-          "effect": "lowers",
-          "log_odds": -1.245
-        },
-        {
-          "feature": "class_condo",
-          "label": "Building class: condo",
-          "value": "yes",
-          "effect": "lowers",
-          "log_odds": -0.28
-        },
-        {
-          "feature": "dob_facade_years_since",
-          "label": "DOB violations (fa\u00e7ade / Local Law 11): years since last",
-          "value": "none",
-          "effect": "lowers",
-          "log_odds": -0.25
-        }
-      ],
-      "provenance": {
-        "facades": {
-          "dataset": "xubg-57si",
-          "rows_updated_at": "2026-10-16T17:31:17+00:00",
-          "fetched_at": "2026-10-17T16:28:56.490864+00:00"
-        },
-        "location": "NYC PLUTO (64uk-42ks) lot centroid"
-      },
-      "missing": []
-    },
-    {
-      "bin": "2096740",
-      "bbl": "2039437501",
-      "address": "1650 METROPOLITAN AVENUE",
-      "borough": "Bronx",
-      "lat": 40.8386125,
-      "lon": -73.8565255,
-      "fisp": {
-        "subcycle": "C",
-        "current_cycle": 10,
-        "filing_window_closes": "2029-02-21",
-        "status_on_record": "SWARMP",
-        "current_cycle_filed": false,
-        "current_cycle_status": null,
-        "history": [
-          {
-            "cycle": 6,
-            "status": "SAFE",
-            "filed_on": "2007-02-21"
-          },
-          {
-            "cycle": 7,
-            "status": "SAFE",
             "filed_on": "2013-02-20"
           },
           {
@@ -1282,20 +1213,20 @@
           },
           {
             "cycle": 9,
-            "status": "SWARMP",
-            "filed_on": "2024-02-20"
+            "status": "SAFE",
+            "filed_on": "2023-12-12"
           }
         ]
       },
       "prediction": {
         "target": "Probability that the building's next Initial FISP filing (cycle 10) records an UNSAFE fa\u00e7ade",
-        "probability": 0.0189,
-        "rank": 13658,
+        "probability": 0.0187,
+        "rank": 13657,
         "of": 13659,
         "percentile": 0.9999,
         "tier": "low",
-        "model_version": "4537262a00e11793",
-        "scored_at": "2026-10-17T17:06:59.948003+00:00",
+        "model_version": "7466a264b5ba6762",
+        "scored_at": "2026-10-17T22:30:21.840037+00:00",
         "scored_on": {
           "machine": "arm64",
           "byteorder": "little"
@@ -1307,21 +1238,21 @@
           "label": "Tax-lot size, sq ft (very large = multi-building development)",
           "value": "1,399,921",
           "effect": "lowers",
-          "log_odds": -1.283
-        },
-        {
-          "feature": "class_condo",
-          "label": "Building class: condo",
-          "value": "yes",
-          "effect": "lowers",
-          "log_odds": -0.277
+          "log_odds": -0.999
         },
         {
           "feature": "bldg_age",
           "label": "Building age (years)",
           "value": "unknown",
           "effect": "lowers",
-          "log_odds": -0.247
+          "log_odds": -0.531
+        },
+        {
+          "feature": "status_at_cutoff",
+          "label": "Status on record now",
+          "value": "SAFE",
+          "effect": "lowers",
+          "log_odds": -0.296
         }
       ],
       "provenance": {
@@ -1335,9 +1266,9 @@
       "missing": []
     },
     {
-      "bin": "2096734",
+      "bin": "2096726",
       "bbl": "2039437501",
-      "address": "1595 ODELL STREET",
+      "address": "2065 ST RAYMOND AVENUE",
       "borough": "Bronx",
       "lat": 40.8386125,
       "lon": -73.8565255,
@@ -1345,41 +1276,41 @@
         "subcycle": "C",
         "current_cycle": 10,
         "filing_window_closes": "2029-02-21",
-        "status_on_record": "SWARMP",
+        "status_on_record": "SAFE",
         "current_cycle_filed": false,
         "current_cycle_status": null,
         "history": [
           {
             "cycle": 6,
             "status": "SAFE",
-            "filed_on": "2007-01-30"
+            "filed_on": "2007-02-09"
           },
           {
             "cycle": 7,
-            "status": "SAFE",
+            "status": "SWARMP",
             "filed_on": "2013-02-20"
           },
           {
             "cycle": 8,
             "status": "SWARMP",
-            "filed_on": "2018-08-23"
+            "filed_on": "2018-06-26"
           },
           {
             "cycle": 9,
-            "status": "SWARMP",
-            "filed_on": "2024-02-21"
+            "status": "SAFE",
+            "filed_on": "2023-07-31"
           }
         ]
       },
       "prediction": {
         "target": "Probability that the building's next Initial FISP filing (cycle 10) records an UNSAFE fa\u00e7ade",
-        "probability": 0.0187,
-        "rank": 13659,
+        "probability": 0.0183,
+        "rank": 13658,
         "of": 13659,
-        "percentile": 1.0,
+        "percentile": 0.9999,
         "tier": "low",
-        "model_version": "4537262a00e11793",
-        "scored_at": "2026-10-17T17:06:59.948003+00:00",
+        "model_version": "7466a264b5ba6762",
+        "scored_at": "2026-10-17T22:30:21.840037+00:00",
         "scored_on": {
           "machine": "arm64",
           "byteorder": "little"
@@ -1391,21 +1322,21 @@
           "label": "Tax-lot size, sq ft (very large = multi-building development)",
           "value": "1,399,921",
           "effect": "lowers",
-          "log_odds": -1.283
-        },
-        {
-          "feature": "class_condo",
-          "label": "Building class: condo",
-          "value": "yes",
-          "effect": "lowers",
-          "log_odds": -0.277
+          "log_odds": -1.02
         },
         {
           "feature": "bldg_age",
           "label": "Building age (years)",
           "value": "unknown",
           "effect": "lowers",
-          "log_odds": -0.248
+          "log_odds": -0.527
+        },
+        {
+          "feature": "status_at_cutoff",
+          "label": "Status on record now",
+          "value": "SAFE",
+          "effect": "lowers",
+          "log_odds": -0.295
         }
       ],
       "provenance": {
@@ -1419,51 +1350,120 @@
       "missing": []
     },
     {
-      "bin": "1082816",
-      "bbl": "1002160001",
-      "address": "388 GREENWICH STREET",
-      "borough": "Manhattan",
-      "lat": 40.7208642,
-      "lon": -74.0110031,
+      "bin": "2096727",
+      "bbl": "2039437501",
+      "address": "2075 ST RAYMOND AVENUE",
+      "borough": "Bronx",
+      "lat": 40.8386125,
+      "lon": -73.8565255,
       "fisp": {
-        "subcycle": "A",
+        "subcycle": "C",
         "current_cycle": 10,
-        "filing_window_closes": "2027-02-21",
-        "status_on_record": "SWARMP",
+        "filing_window_closes": "2029-02-21",
+        "status_on_record": "SAFE",
         "current_cycle_filed": false,
         "current_cycle_status": null,
         "history": [
           {
             "cycle": 6,
             "status": "SAFE",
-            "filed_on": "2007-02-05"
+            "filed_on": "2007-02-09"
           },
           {
             "cycle": 7,
             "status": "SWARMP",
-            "filed_on": "2012-01-20"
+            "filed_on": "2013-02-20"
           },
           {
             "cycle": 8,
             "status": "SWARMP",
-            "filed_on": "2019-05-13"
+            "filed_on": "2018-06-26"
           },
           {
             "cycle": 9,
-            "status": "SWARMP",
-            "filed_on": "2022-02-11"
+            "status": "SAFE",
+            "filed_on": "2023-07-31"
           }
         ]
       },
       "prediction": {
         "target": "Probability that the building's next Initial FISP filing (cycle 10) records an UNSAFE fa\u00e7ade",
-        "probability": 0.2406,
+        "probability": 0.0183,
+        "rank": 13659,
+        "of": 13659,
+        "percentile": 1.0,
+        "tier": "low",
+        "model_version": "7466a264b5ba6762",
+        "scored_at": "2026-10-17T22:30:21.840037+00:00",
+        "scored_on": {
+          "machine": "arm64",
+          "byteorder": "little"
+        }
+      },
+      "drivers": [
+        {
+          "feature": "lot_area",
+          "label": "Tax-lot size, sq ft (very large = multi-building development)",
+          "value": "1,399,921",
+          "effect": "lowers",
+          "log_odds": -1.02
+        },
+        {
+          "feature": "bldg_age",
+          "label": "Building age (years)",
+          "value": "unknown",
+          "effect": "lowers",
+          "log_odds": -0.527
+        },
+        {
+          "feature": "status_at_cutoff",
+          "label": "Status on record now",
+          "value": "SAFE",
+          "effect": "lowers",
+          "log_odds": -0.295
+        }
+      ],
+      "provenance": {
+        "facades": {
+          "dataset": "xubg-57si",
+          "rows_updated_at": "2026-10-16T17:31:17+00:00",
+          "fetched_at": "2026-10-17T16:28:56.490864+00:00"
+        },
+        "location": "NYC PLUTO (64uk-42ks) lot centroid"
+      },
+      "missing": []
+    },
+    {
+      "bin": "3138079",
+      "bbl": "3056490038",
+      "address": "5002 14 AVENUE",
+      "borough": "Brooklyn",
+      "lat": 40.633092,
+      "lon": -73.9909569,
+      "fisp": {
+        "subcycle": "A",
+        "current_cycle": 10,
+        "filing_window_closes": "2027-02-21",
+        "status_on_record": "SAFE",
+        "current_cycle_filed": false,
+        "current_cycle_status": null,
+        "history": [
+          {
+            "cycle": 9,
+            "status": "SAFE",
+            "filed_on": "2020-08-10"
+          }
+        ]
+      },
+      "prediction": {
+        "target": "Probability that the building's next Initial FISP filing (cycle 10) records an UNSAFE fa\u00e7ade",
+        "probability": 0.236,
         "rank": 6830,
         "of": 13659,
         "percentile": 0.5,
         "tier": "typical",
-        "model_version": "4537262a00e11793",
-        "scored_at": "2026-10-17T17:06:59.948003+00:00",
+        "model_version": "7466a264b5ba6762",
+        "scored_at": "2026-10-17T22:30:21.840037+00:00",
         "scored_on": {
           "machine": "arm64",
           "byteorder": "little"
@@ -1473,23 +1473,23 @@
         {
           "feature": "status_at_cutoff",
           "label": "Status on record now",
-          "value": "SWARMP",
-          "effect": "raises",
-          "log_odds": 0.258
+          "value": "SAFE",
+          "effect": "lowers",
+          "log_odds": -0.288
         },
         {
           "feature": "wall_glass",
           "label": "Fa\u00e7ade includes glass",
           "value": "yes",
           "effect": "lowers",
-          "log_odds": -0.258
+          "log_odds": -0.248
         },
         {
-          "feature": "lot_area",
-          "label": "Tax-lot size, sq ft (very large = multi-building development)",
-          "value": "172,327",
+          "feature": "bldg_age",
+          "label": "Building age (years)",
+          "value": "98",
           "effect": "raises",
-          "log_odds": 0.214
+          "log_odds": 0.222
         }
       ],
       "provenance": {

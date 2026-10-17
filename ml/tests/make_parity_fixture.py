@@ -28,5 +28,6 @@ meta = json.loads(META_FILE.read_text())
 (FIXTURES / "parity_cases.json").write_text(json.dumps({
     "features": meta["features"], "bins": list(bins), "X": X.astype(object).where(X.notna(), None).values.tolist(),
     "expected_raw": raw.tolist(), "expected_probability": prob.tolist(), "expected_contrib_sum": contrib.sum(1).tolist(),
-    "generated_on": meta["trained_on"]["machine"], "model_sha256": meta["model_sha256"]}))
+    "generated_on": meta["trained_on"]["machine"], "model_sha256": meta["model_sha256"],
+    "missing_value_sentinel": meta.get("missing_value_sentinel")}))
 print("parity fixture:", len(bins), "cases, model", meta["model_sha256"])

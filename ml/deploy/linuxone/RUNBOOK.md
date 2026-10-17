@@ -27,7 +27,11 @@ cd megatron && git checkout feature/nyc-ml && git pull
 ```bash
 podman exec notebook python3 -m pip install --no-cache-dir --target /home/ibm-user/shared/pydeps \
     fastapi==0.143.3 uvicorn==0.54.0 pytest
+podman exec notebook python3 -m pip install --no-cache-dir --no-deps --target /home/ibm-user/shared/pydeps snapml
 ```
+- Snap ML (IBM) serves the model on the on-chip NNPA accelerator. It uses the container's `/usr/local/lib/libzdnn.so`.
+- At API start-up it is enabled only if Snap ML selects `zdnn_tensors` **and** reproduces XGBoost within 1e-5 on
+  500 buildings. Otherwise the API serves with XGBoost and `/health` explains why.
 `pydantic-core` is the only compiled dependency, and it publishes s390x wheels. If pip tries to compile anything,
 stop and report it.
 
@@ -67,12 +71,19 @@ podman logs -f urban-api      # Ctrl-C to stop following
 ```
 `:z` (lowercase) lets SELinux on RHEL share the mount between `notebook` and `urban-api`.
 
+Restart the API after re-training (it loads the model at start-up):
+```bash
+podman exec notebook pkill -f "uvicorn urban_sentinel" ; sleep 2
+```
+then run the step-5 start command again. Benchmark/evidence for the accelerator:
+`podman exec -w /home/ibm-user/shared/megatron-ml/ml -e PYTHONPATH=/home/ibm-user/shared/pydeps notebook python3 -m urban_sentinel.nnpa_bench`
+
 ## 6. Reach it from a laptop through SSH (the frontend uses http://localhost:8000)
 ```bash
 ssh -i ~/.ssh/<key>.pem -N -L 8000:127.0.0.1:8000 linux1@$VM
-curl -s localhost:8000/health                       # "machine": "s390x", "byteorder": "big"
+curl -s localhost:8000/health                       # "machine": "s390x", "inference_engine": {"engine": "snapml-nnpa", ...}
 curl -s localhost:8000/buildings/2021985
-curl -s -X POST localhost:8000/score/2021985        # live inference on IBM Z; reports inference_ms
+curl -s -X POST localhost:8000/score/2021985        # live inference on the NNPA: "engine": "snapml-nnpa", model_inference_ms
 curl -s "localhost:8000/top?k=10&mode=unknown_risk"
 ```
 CORS allows `localhost:5173` and `localhost:3000` by default. Override with `-e URBAN_SENTINEL_CORS=...`.

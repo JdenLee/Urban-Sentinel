@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 
 from . import evidence, socrata
-from .artifacts import DeployedModel, save_deployment_model
+from .artifacts import DeployedModel, encode_missing, save_deployment_model
 from .config import CYCLE_START, ML_DIR, OUTPUT_DIR, cycle_at, subcycle_deadline
 from .evaluation import ranking_metrics
 from .experiments import fit_all
@@ -101,12 +101,12 @@ def train_vantage_model(ctx: Context, now: pd.Timestamp):
     current = cycle_at(now)
     elapsed = now - CYCLE_START[current]
     data = {t: vantage_dataset(ctx, t, elapsed) for t in (current - 3, current - 2, current - 1)}
-    xy = {t: (X, lab["y"]) for t, (X, lab) in data.items()}
+    xy = {t: (encode_missing(X), lab["y"]) for t, (X, lab) in data.items()}  # NaN-free: NNPA-servable
     t1, t2, t3 = sorted(xy)
     # Backtest at the same vantage: train on the two earlier cycles, test on the latest complete one.
     bt_model, bt_cal, bt_logit, _ = fit_all([xy[t1], xy[t2]], xy[t2])
     X3, lab3 = data[t3]
-    raw3 = bt_model.predict_proba(X3)[:, 1]
+    raw3 = bt_model.predict_proba(encode_missing(X3))[:, 1]
     prev_safe = ((X3["last_status"] == 0) & (X3["status_at_cutoff"] <= 0)).to_numpy()
     backtest = {
         "train_cycles": [t1, t2], "test_cycle": t3, "elapsed_days": elapsed.days,

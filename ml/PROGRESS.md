@@ -1,5 +1,18 @@
 # ML workstream — running progress note
 
+## 2026-10-17 18:55 EDT — deployed model is NaN-free; live /score runs on the NNPA via Snap ML
+
+- **Deployment model** is trained with missing values encoded as −1e6, so Snap ML reproduces it exactly.
+  - Same-vantage backtest PR-AUC 0.467 (rule 0.363), unchanged from the NaN-native model (0.465).
+  - The meta file records `missing_value_sentinel`.
+- **API start-up** loads the same trees into IBM Snap ML with `tree_format="zdnn_tensors"`. It enables the NNPA
+  engine only if Snap ML selects `zdnn_tensors` and matches XGBoost within 1e-5 on 500 pending buildings. Otherwise it
+  stays on XGBoost and gives the reason in `/health.inference_engine`.
+- **`POST /score/{bin}`** returns `engine` (`snapml-nnpa` or `xgboost`), `tree_format`, and `model_inference_ms`.
+  Explanations remain XGBoost TreeSHAP, since Snap ML has no SHAP.
+- **Batch scoring** of all buildings stays on XGBoost, which was faster for batch in the VM benchmark.
+- **To do on the VM:** `git pull`, `pipeline --skip-eval`, restart the API, then check `/health` (RUNBOOK §2/§5).
+
 ## 2026-10-17 18:35 EDT — InSAR ablation: null result (not added to the model)
 
 - **Data** (`ml/insar/`, see its README and QUALITY_REPORT):

@@ -17,7 +17,7 @@ def test_model_predictions_match_reference_architecture():
     cases = json.loads((FIXTURES / "parity_cases.json").read_text())
     booster = xgb.Booster()
     booster.load_model(str(FIXTURES / "parity_model.json"))
-    X = pd.DataFrame(cases["X"], columns=cases["features"], dtype=float)
+    X = pd.DataFrame(cases["X"], columns=cases["features"], dtype=float).fillna(cases.get("missing_value_sentinel", np.nan))
     dm = xgb.DMatrix(X)
     raw = booster.predict(dm)
     prob = PlattCalibrator.from_json(json.loads((FIXTURES / "parity_calibration.json").read_text())).predict(raw)

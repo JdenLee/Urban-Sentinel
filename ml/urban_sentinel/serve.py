@@ -36,6 +36,10 @@ class State:
         payload = json.loads(SCORES_FILE.read_text())
         model = DeployedModel.load()
         ctx = Context.load()
+        # Parity check for the NNPA engine on up to 500 pending buildings (XGBoost stays the engine on any failure).
+        sample = [r["bin"] for r in payload["buildings"] if r["prediction"]][:500]
+        now = pd.Timestamp.now().normalize()
+        model.enable_nnpa(feature_matrix(ctx.restricted_to(sample), pd.Index(sample), now, cycle_at(now)))
         with self.lock:
             self.meta = payload["meta"]
             self.buildings = {r["bin"]: r for r in payload["buildings"]}
@@ -53,7 +57,8 @@ app.add_middleware(CORSMiddleware, allow_origins=os.environ.get("URBAN_SENTINEL_
 def health():
     return {"status": "ok", "platform": evidence.fingerprint(), "model": state.model.meta["model_sha256"],
             "scores_generated_at": state.meta["generated_at"], "data_as_of": state.meta["as_of"],
-            "n_buildings": len(state.buildings), "rescoring": state.rescoring}
+            "n_buildings": len(state.buildings), "rescoring": state.rescoring,
+            "inference_engine": state.model.nnpa_status}
 
 
 @app.get("/meta")
@@ -124,14 +129,17 @@ def live_score(bin_id: str):
     features = state.model.meta["features"]
     sub = state.ctx.restricted_to([bin_id])  # every feature is per-building
     X = feature_matrix(sub, pd.Index([bin_id]), now, cycle_at(now))[features]
-    raw, prob, contrib = state.model.predict(X)
+    out = state.model.score_live(X)
     elapsed_ms = (time.perf_counter() - t0) * 1000
     fp = evidence.fingerprint()
-    return {"bin": bin_id, "probability": round(float(prob[0]), 4), "raw_score": round(float(raw[0]), 4),
+    return {"bin": bin_id, "probability": round(float(out["probability"][0]), 4),
+            "raw_score": round(float(out["raw"][0]), 4),
             "already_filed_this_cycle": rec["fisp"]["current_cycle_filed"],
+            "engine": out["engine"], "tree_format": out["tree_format"],
+            "model_inference_ms": round(out["score_ms"], 4), "total_ms_incl_features": round(elapsed_ms, 2),
             "features": {k: (None if pd.isna(v) else v) for k, v in zip(features, X.iloc[0].tolist())},
-            "contributions": dict(zip(features, [round(float(c), 4) for c in contrib[0]])),
-            "inference_ms": round(elapsed_ms, 2), "machine": fp["machine"], "byteorder": fp["byteorder"],
+            "contributions": dict(zip(features, [round(float(c), 4) for c in out["contrib"][0]])),
+            "explanations": "XGBoost TreeSHAP (CPU)", "machine": fp["machine"], "byteorder": fp["byteorder"],
             "model": state.model.meta["model_sha256"]}
 
 
