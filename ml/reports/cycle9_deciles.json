@@ -1,0 +1,68 @@
+{
+  "design": "Model trained on FISP cycles 7-8 only; features as of 2020-02-21; outcome = cycle-9 Initial filing",
+  "cutoff": "2020-02-21",
+  "n": 13327,
+  "base_rate": 0.25024386583627223,
+  "by_decile": [
+    {
+      "decile": 1,
+      "predicted": 0.4552,
+      "actual_unsafe_rate": 0.5686,
+      "n": 1333
+    },
+    {
+      "decile": 2,
+      "predicted": 0.352,
+      "actual_unsafe_rate": 0.3796,
+      "n": 1333
+    },
+    {
+      "decile": 3,
+      "predicted": 0.3096,
+      "actual_unsafe_rate": 0.2838,
+      "n": 1332
+    },
+    {
+      "decile": 4,
+      "predicted": 0.2761,
+      "actual_unsafe_rate": 0.2873,
+      "n": 1333
+    },
+    {
+      "decile": 5,
+      "predicted": 0.2494,
+      "actual_unsafe_rate": 0.2395,
+      "n": 1332
+    },
+    {
+      "decile": 6,
+      "predicted": 0.2261,
+      "actual_unsafe_rate": 0.1965,
+      "n": 1333
+    },
+    {
+      "decile": 7,
+      "predicted": 0.2071,
+      "actual_unsafe_rate": 0.1898,
+      "n": 1333
+    },
+    {
+      "decile": 8,
+      "predicted": 0.1866,
+      "actual_unsafe_rate": 0.1614,
+      "n": 1332
+    },
+    {
+      "decile": 9,
+      "predicted": 0.1622,
+      "actual_unsafe_rate": 0.1215,
+      "n": 1333
+    },
+    {
+      "decile": 10,
+      "predicted": 0.1354,
+      "actual_unsafe_rate": 0.0743,
+      "n": 1333
+    }
+  ]
+}
