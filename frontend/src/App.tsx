@@ -181,6 +181,20 @@ export default function App() {
     isMock || !!groundMotion || join.scored.some((f) => typeof f.properties.prediction?.factors.sar_velocity_mm_year === 'number');
   const scoreIsProbability = join.scored.every((f) => f.properties.prediction!.probability === f.properties.prediction!.score);
   const movementOn = showMovement && movementAvailable;
+  // Legend facts come from the measured layer itself when it is loaded (period, product, pixel size).
+  const gm = groundMotion?.metadata as Record<string, unknown> | undefined;
+  const gmStr = (k: string) => (typeof gm?.[k] === 'string' ? (gm[k] as string) : null);
+  const movementMeta = gm
+    ? {
+        ...predictions.movement,
+        measurement: gmStr('measurement') ?? predictions.movement.measurement,
+        units: gmStr('units') ?? predictions.movement.units,
+        source: [gmStr('product'), gmStr('frame')].filter(Boolean).join(', ') || predictions.movement.source,
+        posting_m: typeof gm.pixel_size_m === 'number' ? gm.pixel_size_m : predictions.movement.posting_m,
+        period_start: gmStr('observation_start') ?? predictions.movement.period_start,
+        period_end: gmStr('observation_end') ?? predictions.movement.period_end,
+      }
+    : predictions.movement;
 
   return (
     <div className={`app${demo.running ? ' app--demo' : ''}${sidebarOpen ? ' app--sidebar' : ''}${panelOpen && selectedFeature ? ' app--panel' : ''}`}>
@@ -297,7 +311,7 @@ export default function App() {
         </dl>
       </aside>
 
-      {movementOn && <MovementLegend meta={predictions.movement} mode={predictions.data_mode} />}
+      {movementOn && <MovementLegend meta={movementMeta} mode={predictions.data_mode} />}
 
       {panelOpen && selectedFeature && (
         <BuildingPanel

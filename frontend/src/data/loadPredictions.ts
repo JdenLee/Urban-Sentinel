@@ -311,13 +311,18 @@ export async function loadPredictionsWithFallback(
 ): Promise<{ set: PredictionSet; source: PredictionSource; failures: string[] }> {
   const failures: string[] = [];
   for (const source of sources) {
-    try {
-      const set = await loadPredictions(source.url, AbortSignal.any ? AbortSignal.any([signal ?? new AbortController().signal, AbortSignal.timeout(8000)]) : signal);
-      if (set.buildings.length === 0) throw new Error('no scored buildings');
-      return { set, source, failures };
-    } catch (err) {
-      if (signal?.aborted) throw err;
-      failures.push(`${source.label}: ${err instanceof Error ? err.message : String(err)}`);
+    // The live API gets one retry: a transient tunnel hiccup should not drop a recording to mock data.
+    const attempts = source.id === 'live-api' ? 2 : 1;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        const timeout = AbortSignal.timeout(15000);
+        const set = await loadPredictions(source.url, signal ? AbortSignal.any([signal, timeout]) : timeout);
+        if (set.buildings.length === 0) throw new Error('no scored buildings');
+        return { set, source, failures };
+      } catch (err) {
+        if (signal?.aborted) throw err;
+        failures.push(`${source.label} (attempt ${attempt}): ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
   }
   throw new Error(`No prediction source could be loaded. ${failures.join(' · ')}`);
