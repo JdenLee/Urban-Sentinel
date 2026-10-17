@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_HEIGHT_M, joinByBin } from './joinByBin';
 import { parseBuildings } from './loadBuildings';
 import { binString, parsePredictions } from './loadPredictions';
@@ -9,7 +9,7 @@ import { movementPoints } from '../layers/movementHexagonLayer';
 import { demoTimeline, DEMO_DURATION_MS } from '../components/DemoController';
 import { panelTabs } from '../components/BuildingPanel';
 import { parseGeosearch } from './geosearch';
-import { parseFootprint, parseHistory } from './loadHistory';
+import { fetchHistory, parseFootprint, parseHistory } from './loadHistory';
 
 const square = (x: number, y: number) => ({
   type: 'Polygon' as const,
@@ -474,5 +474,19 @@ describe('building history', () => {
     );
     expect(fp?.properties.height_m).toBeCloseTo(30.48);
     expect(parseFootprint({ type: 'FeatureCollection', features: [] }, '4455435')).toBeNull();
+  });
+});
+
+describe('history degradation', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('says no history is available when the API has no history endpoint (e.g. an older VM deploy)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('Not Found', { status: 404 })));
+    await expect(fetchHistory('1001026')).rejects.toThrow(/No history available/);
+  });
+
+  it('explains an unreachable API instead of a bare network error', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+    await expect(fetchHistory('1001026')).rejects.toThrow(/Couldn't reach the ML API/);
   });
 });
