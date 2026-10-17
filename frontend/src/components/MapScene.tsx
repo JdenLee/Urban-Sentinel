@@ -93,6 +93,9 @@ export interface MapSceneProps {
   hexRadius: number;
   /** Real measured movement points (e.g. NASA OPERA DISP-S1); replaces per-building factors when present. */
   externalMovement?: MovementPointDatum[] | null;
+  /** Selected building that is not scored (context footprint or a looked-up building outside the demo area). */
+  highlight: { feature: JoinedFeature; external: boolean } | null;
+  /** Any footprint (scored or not) was clicked; null for empty map. */
   onSelect: (bin: string | null) => void;
   onUserInteract: () => void;
   onBasemapError: (message: string) => void;
@@ -109,6 +112,7 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
     capacityCutoff,
     hexRadius,
     externalMovement,
+    highlight,
     onSelect,
     onUserInteract,
     onBasemapError,
@@ -147,25 +151,27 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
         visiblePriorities,
         capacityCutoff,
         pulse,
+        highlight,
       }),
     ],
-    [points, showMovement, hexRadius, context, join.scored, showRisk, selectedBin, visiblePriorities, capacityCutoff, pulse],
+    [points, showMovement, hexRadius, context, join.scored, showRisk, selectedBin, visiblePriorities, capacityCutoff, pulse, highlight],
   );
 
   const onClick = useCallback(
     (info: PickingInfo) => {
       const f = info.object as JoinedFeature | undefined;
-      onSelect(f?.properties.prediction ? f.properties.bin : null);
+      onSelect(f ? f.properties.bin : null);
     },
     [onSelect],
   );
 
   const getTooltip = useCallback((info: PickingInfo) => {
     const f = info.object as JoinedFeature | undefined;
-    const p = f?.properties.prediction;
-    if (!f || !p) return null;
+    if (!f) return null;
+    const p = f.properties.prediction;
+    const head = p ? `#${p.rank} · ${PRIORITY_LABEL[p.priority]}` : 'Not scored · click for history';
     return {
-      html: `<div class="tt-rank">#${p.rank} · ${PRIORITY_LABEL[p.priority]}</div><div class="tt-addr">${escapeHtml(
+      html: `<div class="tt-rank">${head}</div><div class="tt-addr">${escapeHtml(
         f.properties.address ?? `BIN ${f.properties.bin}`,
       )}</div>`,
       className: 'deck-tooltip',

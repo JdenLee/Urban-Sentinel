@@ -12,10 +12,21 @@ import { loadBuildings } from './data/loadBuildings';
 import { loadPredictionsWithFallback } from './data/loadPredictions';
 import { loadGroundMotion, type GroundMotionLayer } from './data/loadGroundMotion';
 import type { PredictionSource } from './config';
-import { featureCentroid, joinByBin } from './data/joinByBin';
+import { DEFAULT_HEIGHT_M, featureCentroid, joinByBin } from './data/joinByBin';
+import { fetchFootprint, fetchHistory } from './data/loadHistory';
 import { useAssignments } from './data/shortlist';
 import { INITIAL_CAMERA, prefersReducedMotion } from './camera';
-import { PRIORITIES, type JoinResult, type PredictionSet, type Priority } from './types/predictions';
+import { API_BASE } from './config';
+import {
+  PRIORITIES,
+  type BuildingFeature,
+  type HistoryState,
+  type JoinedFeature,
+  type JoinResult,
+  type LookupTarget,
+  type PredictionSet,
+  type Priority,
+} from './types/predictions';
 
 export const APP_TITLE = 'NYC Façade Early-Warning System';
 
@@ -27,6 +38,17 @@ type LoadState =
 /** Below this width the sidebar and building panel cannot both fit beside the map. */
 const NARROW_QUERY = '(max-width: 1100px)';
 const isNarrow = () => typeof window !== 'undefined' && window.matchMedia?.(NARROW_QUERY).matches === true;
+
+/** A fetched footprint for a building outside the demo area, shaped like a scene feature. */
+function toJoined(f: BuildingFeature): JoinedFeature {
+  const h = f.properties.height_m;
+  const hasHeight = typeof h === 'number' && h > 0;
+  return {
+    type: 'Feature',
+    geometry: f.geometry,
+    properties: { ...f.properties, height_m: hasHeight ? h : DEFAULT_HEIGHT_M, height_estimated: !hasHeight, prediction: null },
+  };
+}
 
 const fmtDate = (s: string | null) => {
   if (!s) return '—';
@@ -49,6 +71,11 @@ export default function App() {
   const [basemapError, setBasemapError] = useState<string | null>(null);
   const assignments = useAssignments();
   const mapRef = useRef<MapRef>(null);
+  const [history, setHistory] = useState<HistoryState>({ status: 'idle' });
+  const [lookupLabel, setLookupLabel] = useState<string | null>(null);
+  const [external, setExternal] = useState<JoinedFeature | null>(null);
+  /** Set when a lookup had no coordinates yet: fly once the footprint or history provides them. */
+  const pendingFly = useRef(false);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -107,26 +134,94 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [demo, modelCardOpen]);
 
+  const featureByBin = useMemo(() => new Map((join?.features ?? []).map((f) => [f.properties.bin, f])), [join]);
+
+  const flyTo = useCallback((center: [number, number]) => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    map.flyTo({
+      center,
+      zoom: Math.max(map.getZoom(), 16.2),
+      pitch: 60,
+      padding: isNarrow() ? { top: 40, bottom: 40, left: 20, right: 20 } : { top: 40, bottom: 40, left: 340, right: 420 },
+      duration: prefersReducedMotion() ? 0 : 2200,
+    });
+  }, []);
+
+  /** Select any building: a scene footprint (map click, shortlist, search) or a looked-up BIN. */
   const select = useCallback(
-    (bin: string | null, fly = false) => {
+    (bin: string | null, fly = false, target?: LookupTarget) => {
       demo.stop();
       setSelectedBin(bin);
       setPanelOpen(bin !== null);
+      setLookupLabel(target?.label ?? null);
+      pendingFly.current = false;
       if (bin && isNarrow()) setSidebarOpen(false);
-      const f = bin ? join?.scored.find((s) => s.properties.bin === bin) : undefined;
-      const map = mapRef.current?.getMap();
-      if (fly && f && map) {
-        map.flyTo({
-          center: featureCentroid(f),
-          zoom: Math.max(map.getZoom(), 16.2),
-          pitch: 60,
-          padding: isNarrow() ? { top: 40, bottom: 40, left: 20, right: 20 } : { top: 40, bottom: 40, left: 340, right: 420 },
-          duration: prefersReducedMotion() ? 0 : 2200,
-        });
-      }
+      if (!bin || !fly) return;
+      const f = featureByBin.get(bin);
+      if (f) flyTo(featureCentroid(f));
+      else if (target?.lonLat) flyTo(target.lonLat);
+      else pendingFly.current = true;
     },
-    [demo, join],
+    [demo, featureByBin, flyTo],
   );
+  const lookup = useCallback((target: LookupTarget) => select(target.bin, true, target), [select]);
+
+  /** Selected building without a priority colour: an unscored scene footprint or a fetched external one. */
+  const highlight = useMemo(() => {
+    if (!selectedBin) return null;
+    const f = featureByBin.get(selectedBin);
+    if (f) return f.properties.prediction ? null : { feature: f, external: false };
+    return external ? { feature: external, external: true } : null;
+  }, [selectedBin, featureByBin, external]);
+
+  // Building history from the ML API, for whichever building is selected.
+  useEffect(() => {
+    if (!selectedBin) {
+      setHistory({ status: 'idle' });
+      return;
+    }
+    if (!API_BASE) {
+      setHistory({ status: 'unavailable' });
+      return;
+    }
+    const ctrl = new AbortController();
+    setHistory({ status: 'loading' });
+    fetchHistory(selectedBin, ctrl.signal)
+      .then((data) => {
+        setHistory({ status: 'ready', data });
+        if (pendingFly.current && data.lonLat) {
+          pendingFly.current = false;
+          flyTo(data.lonLat);
+        }
+      })
+      .catch((err: unknown) => {
+        if (ctrl.signal.aborted) return;
+        setHistory({ status: 'error', message: err instanceof Error ? err.message : String(err) });
+      });
+    return () => ctrl.abort();
+  }, [selectedBin, flyTo]);
+
+  // Footprint for a selected building outside the demo area, so it can be drawn and framed.
+  useEffect(() => {
+    setExternal(null);
+    if (!selectedBin || featureByBin.has(selectedBin)) return;
+    const ctrl = new AbortController();
+    fetchFootprint(selectedBin, ctrl.signal)
+      .then((fp) => {
+        if (!fp) return;
+        const jf = toJoined(fp);
+        setExternal(jf);
+        if (pendingFly.current) {
+          pendingFly.current = false;
+          flyTo(featureCentroid(jf));
+        }
+      })
+      .catch(() => {
+        /* footprint is decoration; the panel still works without it */
+      });
+    return () => ctrl.abort();
+  }, [selectedBin, featureByBin, flyTo]);
 
   const resetView = useCallback(() => {
     demo.stop();
@@ -174,7 +269,10 @@ export default function App() {
     );
   }
 
-  const selectedFeature = selectedBin ? join.scored.find((f) => f.properties.bin === selectedBin) : undefined;
+  const selectedFeature = selectedBin ? featureByBin.get(selectedBin) ?? null : null;
+  const scenePrediction = selectedFeature?.properties.prediction ?? null;
+  const panelPrediction = scenePrediction ?? (history.status === 'ready' ? history.data.prediction : null);
+
   const isMock = predictions.data_mode === 'mock';
   const groundMotion = load.groundMotion;
   const movementAvailable =
@@ -197,7 +295,7 @@ export default function App() {
     : predictions.movement;
 
   return (
-    <div className={`app${demo.running ? ' app--demo' : ''}${sidebarOpen ? ' app--sidebar' : ''}${panelOpen && selectedFeature ? ' app--panel' : ''}`}>
+    <div className={`app${demo.running ? ' app--demo' : ''}${sidebarOpen ? ' app--sidebar' : ''}${panelOpen && selectedBin ? ' app--panel' : ''}`}>
       <MapScene
         ref={mapRef}
         join={join}
@@ -209,6 +307,7 @@ export default function App() {
         capacityCutoff={shortlistOnly ? capacity : null}
         hexRadius={predictions.movement.aggregation_m}
         externalMovement={groundMotion?.points ?? null}
+        highlight={highlight}
         onSelect={(bin) => select(bin)}
         onUserInteract={demo.stop}
         onBasemapError={setBasemapError}
@@ -258,7 +357,7 @@ export default function App() {
       </header>
 
       <aside id="sidebar" className="panel sidebar" aria-label="Map controls" hidden={!sidebarOpen}>
-        <SearchBox scored={join.scored} onSelect={(bin) => select(bin, true)} />
+        <SearchBox scored={join.scored} onSelect={(bin) => select(bin, true)} onLookup={lookup} />
         <LayerControls
           showRisk={showRisk}
           showMovement={movementOn}
@@ -313,15 +412,20 @@ export default function App() {
 
       {movementOn && <MovementLegend meta={movementMeta} mode={predictions.data_mode} />}
 
-      {panelOpen && selectedFeature && (
+      {panelOpen && selectedBin && (
         <BuildingPanel
-          key={selectedFeature.properties.bin}
+          key={selectedBin}
+          bin={selectedBin}
           feature={selectedFeature}
+          prediction={panelPrediction}
+          history={history}
+          fallbackTitle={lookupLabel}
+          rankScope={scenePrediction ? 'area' : 'citywide'}
           total={predictions.buildings.length}
           capacity={capacity}
           modelCard={predictions.model_card}
-          status={assignments.get(selectedFeature.properties.bin)}
-          onStatusChange={(s) => assignments.set(selectedFeature.properties.bin, s)}
+          status={assignments.get(selectedBin)}
+          onStatusChange={(s) => assignments.set(selectedBin, s)}
           onOpenModelCard={() => setModelCardOpen(true)}
           onClose={() => setPanelOpen(false)}
         />

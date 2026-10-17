@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { JoinedFeature } from '../types/predictions';
 import { PRIORITY_LABEL } from './priority';
+import type { AddressMatch } from './geosearch';
 
 export type AssignmentStatus = 'unassigned' | 'assigned' | 'inspected' | 'deferred';
 export const ASSIGNMENT_LABEL: Record<AssignmentStatus, string> = {
@@ -78,6 +79,40 @@ export function downloadText(filename: string, text: string, type = 'text/csv') 
   a.download = filename;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export type SearchItem =
+  | { kind: 'scored'; bin: string; label: string; feature: JoinedFeature }
+  | { kind: 'address'; bin: string; label: string; match: AddressMatch }
+  | { kind: 'bin'; bin: string; label: string };
+
+/**
+ * One result list for the search box: scored buildings in the scene first (they carry a priority), then
+ * NYC address suggestions for other buildings, then a direct "look up this BIN" entry for a typed BIN.
+ */
+export function combineSearchResults(
+  local: JoinedFeature[],
+  addresses: AddressMatch[],
+  query: string,
+  limit = 10,
+): SearchItem[] {
+  const items: SearchItem[] = local.map((f) => ({
+    kind: 'scored' as const,
+    bin: f.properties.bin,
+    label: f.properties.address ?? `BIN ${f.properties.bin}`,
+    feature: f,
+  }));
+  const seen = new Set(items.map((i) => i.bin));
+  for (const m of addresses) {
+    if (seen.has(m.bin)) continue;
+    seen.add(m.bin);
+    items.push({ kind: 'address', bin: m.bin, label: m.label, match: m });
+  }
+  const q = query.trim();
+  if (/^[1-5]\d{6}$/.test(q) && !/^[1-5]000000$/.test(q) && !seen.has(q)) {
+    items.push({ kind: 'bin', bin: q, label: `Look up BIN ${q}` });
+  }
+  return items.slice(0, limit);
 }
 
 /** Case-insensitive match on address words or BIN prefix. */
