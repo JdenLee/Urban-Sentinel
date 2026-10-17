@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import evidence, score
 from .artifacts import DeployedModel
 from .config import OUTPUT_DIR, REPORTS_DIR, cycle_at
+from .export_frontend import GROUND_MOTION_FILE, LOWER_MANHATTAN_BBOX, frontend_payload
 from .featureset import Context, feature_matrix
 
 SCORES_FILE = OUTPUT_DIR / "buildings_scores.json"
@@ -118,8 +119,26 @@ def geojson(tier: str | None = None, bbox: str | None = Query(None, description=
     return {"type": "FeatureCollection", "features": features}
 
 
+@app.get("/predictions")
+def predictions(bbox: str | None = Query(None, description="minLon,minLat,maxLon,maxLat (default: Lower Manhattan demo area)")):
+    """Frontend-ready payload (data_mode=real) for a map area, with model card, cycle-9 backtest and ground-motion
+    metadata when available."""
+    box = tuple(float(v) for v in bbox.split(",")) if bbox else LOWER_MANHATTAN_BBOX
+    if len(box) != 4:
+        raise HTTPException(422, "bbox must be minLon,minLat,maxLon,maxLat")
+    return frontend_payload(list(state.buildings.values()), state.meta, box)
+
+
+@app.get("/layers/ground-motion.geojson")
+def ground_motion():
+    """Quality-filtered NASA OPERA DISP-S1 velocities (visualisation only; not a model input)."""
+    if not GROUND_MOTION_FILE.exists():
+        raise HTTPException(404, "ground-motion layer not exported on this server (ml/insar/export_map_layer.py)")
+    return json.loads(GROUND_MOTION_FILE.read_text())
+
+
 @app.post("/score/{bin_id}")
-def live_score(bin_id: str):
+def live_score(bin_id: str, engine: Literal["auto", "nnpa", "xgboost"] = "auto"):
     """Recompute this building's features from current records and run the model now, on this server."""
     rec = state.buildings.get(bin_id)
     if rec is None:
@@ -129,7 +148,10 @@ def live_score(bin_id: str):
     features = state.model.meta["features"]
     sub = state.ctx.restricted_to([bin_id])  # every feature is per-building
     X = feature_matrix(sub, pd.Index([bin_id]), now, cycle_at(now))[features]
-    out = state.model.score_live(X)
+    try:
+        out = state.model.score_live(X, engine)
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc)) from exc
     elapsed_ms = (time.perf_counter() - t0) * 1000
     fp = evidence.fingerprint()
     return {"bin": bin_id, "probability": round(float(out["probability"][0]), 4),

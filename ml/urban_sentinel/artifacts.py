@@ -112,12 +112,14 @@ class DeployedModel:
         self.nnpa_status = status
         return status
 
-    def score_live(self, X: pd.DataFrame) -> dict:
+    def score_live(self, X: pd.DataFrame, engine: str = "auto") -> dict:
         """Per-request scoring: Snap ML on the NNPA when enabled (else XGBoost); explanations via XGBoost
-        TreeSHAP, which Snap ML does not provide."""
+        TreeSHAP, which Snap ML does not provide. engine: "auto" | "nnpa" | "xgboost"."""
+        if engine == "nnpa" and self.snapml_model is None:
+            raise RuntimeError(f"NNPA engine unavailable: {self.nnpa_status.get('reason')}")
         Xm = self._matrix(X)
         t0 = time.perf_counter()
-        if self.snapml_model is not None:
+        if self.snapml_model is not None and engine != "xgboost":
             raw = self.snapml_model.predict_proba(Xm)[:, 1]
             engine = "snapml-nnpa"
         else:
