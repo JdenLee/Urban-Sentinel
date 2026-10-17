@@ -1,5 +1,34 @@
 # ML workstream — running progress note
 
+## 2026-10-17 18:35 EDT — InSAR ablation: null result (not added to the model)
+
+- **Data** (`ml/insar/`, see its README and QUALITY_REPORT):
+  - NASA OPERA DISP-S1, frame F08622: 97 epochs from 2016-09 to 2020-02, all before the cycle-9 cutoff.
+  - Fetched as about 2 GB of remote byte-range subsets instead of about 41 GB of granules.
+  - 89% of land pixels pass quality checks. 99.1% of FISP buildings have features.
+  - Sanity check passes: Arthur Ashe Stadium −3.1 mm/yr vs −3.0 published.
+- **Ablation** (`reports/INSAR_ABLATION.md`). Motion features only (ramp-free velocity, local differential motion,
+  acceleration, seasonal amplitude, spread), winsorised:
+  - A, train 7–8 → test 9 (training rows see post-cutoff motion): PR-AUC 0.454 → 0.452 (Δ −0.002, CI −0.006 to
+    +0.002).
+  - **B, clean: cycle-9 5-fold CV grouped by tax block:** PR-AUC 0.457 → 0.459 (Δ +0.001, CI −0.004 to +0.006).
+  - The previously-SAFE subgroup shows no gain in either design.
+- **Conclusion.** At building scale, 2016–2020 ground motion adds nothing beyond municipal records. This is
+  consistent with about 1–2 mm/yr motion and 30 m pixels. It is kept out of the deployed model and can be used as a
+  visualization layer only, with no structural-safety inference.
+
+## 2026-10-17 17:30 EDT — NNPA verified (Snap ML), not yet deployed
+
+- On the VM: the CPU advertises `nnpa`, and zDNN 1.1.2 returns `zdnn_is_nnpa_installed()=true`.
+- Snap ML 1.17.2 imports the model after a legacy JSON rewrite: XGBoost 3.4's JSON trips its parser.
+- The deployed model diverges in Snap ML only on rows with missing values. The 82 complete rows match to 2e-7.
+- A sentinel-encoded variant has the same accuracy (same-vantage backtest PR-AUC 0.468 vs 0.465). On
+  `zdnn_tensors` (NNPA) it **matches XGBoost to within 3.8e-7 on all 13,650 buildings**, with an identical top 500.
+- Timings:
+  - Single row: NNPA 0.022 ms vs XGBoost 0.087 ms.
+  - Batch: NNPA 134 ms vs XGBoost 49 ms (NNPA is slower for batch).
+  - **Claim verified NNPA inference with exact agreement, not overall speed.**
+
 ## 2026-10-17 16:05 EDT — verified on IBM LinuxONE (s390x, RHEL 9.8, Podman)
 
 The full pipeline ran **inside IBM's `jupyterlab-image-s390x` container** on the team VM. Evidence is in
