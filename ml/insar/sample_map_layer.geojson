@@ -1,0 +1,454 @@
+{
+ "type": "FeatureCollection",
+ "metadata": {
+  "title": "NASA OPERA DISP-S1 ground motion at FISP buildings (measured, quality-filtered)",
+  "measurement": "Line-of-sight (LOS) velocity relative to the surrounding ~2 km",
+  "units": "mm/yr",
+  "sign_convention": "positive = motion toward the satellite (≈ uplift); negative = away (≈ subsidence)",
+  "velocity_definition": "Per building: median velocity of good 30 m pixels within 50 m of the footprint centroid, minus the ~2 km background (300 m block medians, 2.1 km moving median). This removes a ~5 mm/yr long-wavelength artefact ramp across the city; velocities are relative, not absolute.",
+  "vertical_approx_definition": "velocity_mm_yr / 0.792 (median LOS up-component); assumes purely vertical motion",
+  "velocity_se_definition": "formal least-squares standard error (white-noise assumption; optimistic)",
+  "significant_definition": "|velocity_mm_yr| > 2 × velocity_se_mm_yr",
+  "quality_definition": "0–1 mean of rescaled temporal coherence (0.7→1), good-pixel share within 50 m, and pixel support (n/9)",
+  "relative_to": "~2 km surroundings (not absolute; regional subsidence and the artefact ramp are removed)",
+  "satellite": "Sentinel-1A/B (C-band SAR)",
+  "product": "NASA OPERA L3 DISP-S1 v1.0",
+  "frame": "F08622 (ascending)",
+  "pixel_size_m": 30,
+  "observation_start": "2016-09-26",
+  "observation_end": "2020-02-14",
+  "reference_date": "2016-07-16",
+  "n_epochs": 97,
+  "quality_filters": [
+   {
+    "filter": "has InSAR measurement",
+    "kept": 16756,
+    "dropped": 149
+   },
+   {
+    "filter": "≥ 3 good pixels within 50 m",
+    "kept": 16528,
+    "dropped": 228
+   },
+   {
+    "filter": "good-pixel share within 50 m ≥ 0.5",
+    "kept": 16451,
+    "dropped": 77
+   },
+   {
+    "filter": "mean temporal coherence ≥ 0.7",
+    "kept": 16449,
+    "dropped": 2
+   },
+   {
+    "filter": "not in radar layover/shadow",
+    "kept": 16428,
+    "dropped": 21
+   },
+   {
+    "filter": "finite velocity and standard error",
+    "kept": 16428,
+    "dropped": 0
+   },
+   {
+    "filter": "|velocity| ≤ 5.0 mm/yr (outliers: construction, water edges)",
+    "kept": 16414,
+    "dropped": 14
+   }
+  ],
+  "n_features": 16414,
+  "n_fisp_buildings": 16905,
+  "limitations": "Block-scale motion of the built surface measured from orbit (30 m pixels shared with neighbours), relative to the surrounding ~2 km; it is NOT a structural-safety measure, at building scale it is mostly below the noise floor, and adding it did not improve the façade model.",
+  "provenance": {
+   "cmr_collections": {
+    "OPERA_L3_DISP-S1_V1": "C3294057315-ASF",
+    "OPERA_L3_DISP-S1-STATIC_V1": "C3959290248-ASF"
+   },
+   "buildings": "NYC Open Data: FISP filings xubg-57si (BINs), Building Footprints 5zhs-2jue, PLUTO 64uk-42ks",
+   "processing": "ml/insar/build_features.py (cutoff 2020-02-21), ml/insar/export_map_layer.py",
+   "generated_at": "2026-10-17T23:39:03+00:00"
+  }
+ },
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -73.9833,
+     40.7787
+    ]
+   },
+   "properties": {
+    "bin": "1030413",
+    "velocity_mm_yr": -0.47,
+    "vertical_approx_mm_yr": -0.59,
+    "velocity_se_mm_yr": 0.46,
+    "local_differential_mm_yr": -0.31,
+    "quality": 0.98,
+    "significant": false
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -73.9603,
+     40.7707
+    ]
+   },
+   "properties": {
+    "bin": "1043046",
+    "velocity_mm_yr": 0.07,
+    "vertical_approx_mm_yr": 0.09,
+    "velocity_se_mm_yr": 0.94,
+    "local_differential_mm_yr": -0.11,
+    "quality": 0.96,
+    "significant": false
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -73.961,
+     40.7627
+    ]
+   },
+   "properties": {
+    "bin": "1044386",
+    "velocity_mm_yr": 0.33,
+    "vertical_approx_mm_yr": 0.42,
+    "velocity_se_mm_yr": 0.87,
+    "local_differential_mm_yr": 0.24,
+    "quality": 0.95,
+    "significant": false
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -74.0076,
+     40.7462
+    ]
+   },
+   "properties": {
+    "bin": "1087746",
+    "velocity_mm_yr": -0.39,
+    "vertical_approx_mm_yr": -0.5,
+    "velocity_se_mm_yr": 0.46,
+    "local_differential_mm_yr": 0.12,
+    "quality": 1.0,
+    "significant": false
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -73.9154,
+     40.8414
+    ]
+   },
+   "properties": {
+    "bin": "2008113",
+    "velocity_mm_yr": -0.19,
+    "vertical_approx_mm_yr": -0.25,
+    "velocity_se_mm_yr": 0.7,
+    "local_differential_mm_yr": -0.24,
+    "quality": 0.96,
+    "significant": false
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -73.8808,
+     40.876
+    ]
+   },
+   "properties": {
+    "bin": "2018006",
+    "velocity_mm_yr": 0.13,
+    "vertical_approx_mm_yr": 0.16,
+    "velocity_se_mm_yr": 0.75,
+    "local_differential_mm_yr": -0.04,
+    "quality": 0.96,
+    "significant": false
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -73.8692,
+     40.8581
+    ]
+   },
+   "properties": {
+    "bin": "2049733",
+    "velocity_mm_yr": 0.26,
+    "vertical_approx_mm_yr": 0.33,
+    "velocity_se_mm_yr": 0.8,
+    "local_differential_mm_yr": 0.08,
+    "quality": 0.8,
+    "significant": false
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -73.9148,
+     40.8167
+    ]
+   },
+   "properties": {
+    "bin": "2127129",
+    "velocity_mm_yr": -1.55,
+    "vertical_approx_mm_yr": -1.95,
+    "velocity_se_mm_yr": 0.61,
+    "local_differential_mm_yr": -1.11,
+    "quality": 0.85,
+    "significant": true
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -73.9583,
+     40.64
+    ]
+   },
+   "properties": {
+    "bin": "3119501",
+    "velocity_mm_yr": 0.15,
+    "vertical_approx_mm_yr": 0.19,
+    "velocity_se_mm_yr": 0.56,
+    "local_differential_mm_yr": 0.07,
+    "quality": 0.99,
+    "significant": false
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -73.9426,
+     40.6574
+    ]
+   },
+   "properties": {
+    "bin": "3327720",
+    "velocity_mm_yr": 0.15,
+    "vertical_approx_mm_yr": 0.19,
+    "velocity_se_mm_yr": 0.57,
+    "local_differential_mm_yr": -0.02,
+    "quality": 0.95,
+    "significant": false
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -73.8815,
+     40.645
+    ]
+   },
+   "properties": {
+    "bin": "3391208",
+    "velocity_mm_yr": -0.7,
+    "vertical_approx_mm_yr": -0.88,
+    "velocity_se_mm_yr": 0.56,
+    "local_differential_mm_yr": -0.52,
+    "quality": 0.89,
+    "significant": false
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -73.9295,
+     40.6654
+    ]
+   },
+   "properties": {
+    "bin": "3425987",
+    "velocity_mm_yr": 0.04,
+    "vertical_approx_mm_yr": 0.05,
+    "velocity_se_mm_yr": 0.5,
+    "local_differential_mm_yr": 0.0,
+    "quality": 0.99,
+    "significant": false
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -73.9271,
+     40.7378
+    ]
+   },
+   "properties": {
+    "bin": "4003042",
+    "velocity_mm_yr": 0.1,
+    "vertical_approx_mm_yr": 0.12,
+    "velocity_se_mm_yr": 0.56,
+    "local_differential_mm_yr": 0.08,
+    "quality": 0.95,
+    "significant": false
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -73.9131,
+     40.7429
+    ]
+   },
+   "properties": {
+    "bin": "4030861",
+    "velocity_mm_yr": 0.26,
+    "vertical_approx_mm_yr": 0.33,
+    "velocity_se_mm_yr": 0.6,
+    "local_differential_mm_yr": 0.27,
+    "quality": 0.99,
+    "significant": false
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -73.8501,
+     40.7348
+    ]
+   },
+   "properties": {
+    "bin": "4051529",
+    "velocity_mm_yr": 0.35,
+    "vertical_approx_mm_yr": 0.44,
+    "velocity_se_mm_yr": 0.59,
+    "local_differential_mm_yr": -0.01,
+    "quality": 0.95,
+    "significant": false
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -73.8456,
+     40.7193
+    ]
+   },
+   "properties": {
+    "bin": "4077443",
+    "velocity_mm_yr": -0.29,
+    "vertical_approx_mm_yr": -0.36,
+    "velocity_se_mm_yr": 0.57,
+    "local_differential_mm_yr": -0.16,
+    "quality": 0.99,
+    "significant": false
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -74.0805,
+     40.647
+    ]
+   },
+   "properties": {
+    "bin": "5000107",
+    "velocity_mm_yr": -0.13,
+    "vertical_approx_mm_yr": -0.17,
+    "velocity_se_mm_yr": 0.71,
+    "local_differential_mm_yr": 0.17,
+    "quality": 0.94,
+    "significant": false
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -74.0957,
+     40.6426
+    ]
+   },
+   "properties": {
+    "bin": "5001761",
+    "velocity_mm_yr": -0.16,
+    "vertical_approx_mm_yr": -0.2,
+    "velocity_se_mm_yr": 0.77,
+    "local_differential_mm_yr": -0.32,
+    "quality": 0.97,
+    "significant": false
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -74.0964,
+     40.6423
+    ]
+   },
+   "properties": {
+    "bin": "5001762",
+    "velocity_mm_yr": 0.07,
+    "vertical_approx_mm_yr": 0.09,
+    "velocity_se_mm_yr": 0.77,
+    "local_differential_mm_yr": -0.13,
+    "quality": 0.96,
+    "significant": false
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -74.1621,
+     40.6332
+    ]
+   },
+   "properties": {
+    "bin": "5110121",
+    "velocity_mm_yr": 0.38,
+    "vertical_approx_mm_yr": 0.49,
+    "velocity_se_mm_yr": 0.95,
+    "local_differential_mm_yr": 0.28,
+    "quality": 0.94,
+    "significant": false
+   }
+  }
+ ]
+}
