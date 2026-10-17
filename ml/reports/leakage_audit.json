@@ -1,0 +1,35 @@
+{
+  "strict": {
+    "n": 13327,
+    "positives": 3335,
+    "base_rate": 0.25024386583627223,
+    "pr_auc": 0.378670490878273,
+    "roc_auc": 0.6293312010928084,
+    "precision@250": 0.52,
+    "recall@250": 0.038980509745127435,
+    "lift@250": 2.0779730134932533,
+    "precision@500": 0.522,
+    "recall@500": 0.0782608695652174,
+    "lift@500": 2.0859652173913044,
+    "precision@1000": 0.522,
+    "recall@1000": 0.1565217391304348,
+    "lift@1000": 2.0859652173913044
+  },
+  "strict_plus_penalty_fields": {
+    "n": 13327,
+    "positives": 3335,
+    "base_rate": 0.25024386583627223,
+    "pr_auc": 0.5515396736998557,
+    "roc_auc": 0.8037112448579553,
+    "precision@250": 0.532,
+    "recall@250": 0.039880059970014994,
+    "lift@250": 2.1259262368815595,
+    "precision@500": 0.558,
+    "recall@500": 0.08365817091454272,
+    "lift@500": 2.229824887556222,
+    "precision@1000": 0.574,
+    "recall@1000": 0.17211394302848576,
+    "lift@1000": 2.2937625187406296
+  },
+  "conclusion": "Penalty fields raise cycle-9 PR-AUC from 0.379 to 0.552; with no posting date this is treated as post-cutoff leakage and the fields are excluded."
+}
