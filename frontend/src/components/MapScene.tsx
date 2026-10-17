@@ -6,7 +6,7 @@ import type { StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { DataMode, JoinedFeature, JoinResult, Priority } from '../types/predictions';
 import { buildingRiskLayers } from '../layers/buildingRiskLayer';
-import { movementHexagonLayer, movementPoints } from '../layers/movementHexagonLayer';
+import { movementHexagonLayer, movementPoints, type MovementPointDatum } from '../layers/movementHexagonLayer';
 import { PRIORITY_LABEL } from '../data/priority';
 import { DEMO_BBOX, INITIAL_VIEW } from '../camera';
 
@@ -91,6 +91,8 @@ export interface MapSceneProps {
   visiblePriorities: Set<Priority>;
   capacityCutoff: number | null;
   hexRadius: number;
+  /** Real measured movement points (e.g. NASA OPERA DISP-S1); replaces per-building factors when present. */
+  externalMovement?: MovementPointDatum[] | null;
   onSelect: (bin: string | null) => void;
   onUserInteract: () => void;
   onBasemapError: (message: string) => void;
@@ -106,6 +108,7 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
     visiblePriorities,
     capacityCutoff,
     hexRadius,
+    externalMovement,
     onSelect,
     onUserInteract,
     onBasemapError,
@@ -114,7 +117,10 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
 ) {
   const mapStyle = useBasemapStyle(onBasemapError);
   const context = useMemo(() => join.features.filter((f) => !f.properties.prediction), [join]);
-  const points = useMemo(() => movementPoints(join.features, dataMode), [join, dataMode]);
+  const points = useMemo(
+    () => externalMovement ?? movementPoints(join.features, dataMode),
+    [externalMovement, join, dataMode],
+  );
 
   // Gentle pulse for the selection beacon; stops when nothing is selected.
   const [pulse, setPulse] = useState(0);

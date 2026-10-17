@@ -230,3 +230,29 @@ frontend/
 - [deck.gl HexagonLayer docs](https://deck.gl/docs/api-reference/aggregation-layers/hexagon-layer)
 - [react-visgl-maplibre starter](https://github.com/Trapar-waves/react-visgl-maplibre) (MIT), for the overlay integration pattern
 - [manhattan-3d](https://github.com/anchitjaincfa/manhattan-3d), for performance and visual reference only, because its licence is unconfirmed
+
+## Real predictions from IBM LinuxONE and live recalculation
+
+The app now loads predictions from the first source that works:
+1. **Live ML API**: `GET {VITE_API_URL}/predictions` (default `http://localhost:8000`). The FastAPI service in `ml/`
+   runs on the team's IBM LinuxONE VM and is reached through an SSH tunnel
+   (`ssh -N -L 8000:127.0.0.1:8000 linux1@<vm>`; see `ml/deploy/linuxone/RUNBOOK.md`).
+2. **Exported snapshot**: `public/data/linuxone-predictions.json`, written on the VM by
+   `python -m urban_sentinel.export_frontend`, so recordings don't depend on the tunnel.
+3. **Mock data**, still badged "Mock data", only if neither of the above loads.
+
+The header badge shows where predictions were computed: `scored_on.machine` from the export, e.g. "IBM LinuxONE (s390x)".
+
+**Recalculate on IBM Z** (building panel → Overview) calls `POST /score/{bin}`. The server rebuilds that building's
+features and scores it live. The panel shows:
+- the engine: `snapml-nnpa` (IBM Z on-chip AI accelerator via IBM Snap ML) or `xgboost` (CPU);
+- the probability;
+- the model inference time and the end-to-end time;
+- the machine.
+
+"Compare with CPU" re-scores the building on XGBoost to show the two engines agree.
+
+**Satellite movement** in real mode uses only measured NASA OPERA DISP-S1 velocities, from
+`GET /layers/ground-motion.geojson` or `public/data/insar-ground-motion.geojson`. If neither is present, the layer stays
+disabled; no synthetic points are generated. It is a visualization layer only: ground motion did not improve the model
+(`ml/reports/INSAR_ABLATION.md`).

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { BuildingPrediction, Contribution, JoinedFeature, ModelCard, MovementPoint } from '../types/predictions';
 import { PRIORITY_COLOR, PRIORITY_LABEL, rgbCss } from '../data/priority';
 import { ASSIGNMENT_LABEL, ASSIGNMENT_STATUSES, type AssignmentStatus } from '../data/shortlist';
+import { LiveRescore } from './LiveRescore';
 
 const FACTOR_LABELS: Record<string, { label: string; unit?: string }> = {
   sar_velocity_mm_year: { label: 'LOS velocity', unit: 'mm/yr' },
@@ -159,6 +160,8 @@ function OverviewTab({ p, color, modelCard, onOpenModelCard }: BuildingPanelProp
           {modelCard.score_definition ?? (scoreIsProbability ? modelCard.target : null) ?? 'Normalized priority score, 0–1.'}
         </p>
       </section>
+
+      <LiveRescore bin={p.bin} storedProbability={p.probability} />
 
       {p.explanations.length > 0 && (
         <section>

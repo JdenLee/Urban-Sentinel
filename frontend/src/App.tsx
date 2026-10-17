@@ -9,7 +9,9 @@ import { MovementLegend } from './components/MovementLegend';
 import { ModelCardDialog } from './components/ModelCard';
 import { DemoController, useDemoRunner, type DemoTarget } from './components/DemoController';
 import { loadBuildings } from './data/loadBuildings';
-import { loadPredictions } from './data/loadPredictions';
+import { loadPredictionsWithFallback } from './data/loadPredictions';
+import { loadGroundMotion, type GroundMotionLayer } from './data/loadGroundMotion';
+import type { PredictionSource } from './config';
 import { featureCentroid, joinByBin } from './data/joinByBin';
 import { useAssignments } from './data/shortlist';
 import { INITIAL_CAMERA, prefersReducedMotion } from './camera';
@@ -20,7 +22,7 @@ export const APP_TITLE = 'NYC Façade Early-Warning System';
 type LoadState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
-  | { status: 'ready'; join: JoinResult; predictions: PredictionSet };
+  | { status: 'ready'; join: JoinResult; predictions: PredictionSet; source: PredictionSource; groundMotion: GroundMotionLayer | null };
 
 /** Below this width the sidebar and building panel cannot both fit beside the map. */
 const NARROW_QUERY = '(max-width: 1100px)';
@@ -51,13 +53,15 @@ export default function App() {
   useEffect(() => {
     const ctrl = new AbortController();
     setLoad({ status: 'loading' });
-    Promise.all([loadBuildings(undefined, ctrl.signal), loadPredictions(undefined, ctrl.signal)])
-      .then(([buildings, predictions]) => {
+    Promise.all([loadBuildings(undefined, ctrl.signal), loadPredictionsWithFallback(ctrl.signal), loadGroundMotion(ctrl.signal)])
+      .then(([buildings, { set: predictions, source, failures }, groundMotion]) => {
+        if (failures.length) console.info('[predictions] fell back past:', failures);
         const join = joinByBin(buildings, predictions);
         if (join.unmatchedPredictions.length) {
           console.info(`[join] ${join.unmatchedPredictions.length} prediction(s) have no footprint in the demo area.`);
         }
-        setLoad({ status: 'ready', join, predictions });
+        // Real ground motion is only paired with real predictions; mock mode keeps its own labelled layer.
+        setLoad({ status: 'ready', join, predictions, source, groundMotion: predictions.data_mode === 'real' ? groundMotion : null });
       })
       .catch((err: unknown) => {
         if (ctrl.signal.aborted) return;
@@ -172,8 +176,9 @@ export default function App() {
 
   const selectedFeature = selectedBin ? join.scored.find((f) => f.properties.bin === selectedBin) : undefined;
   const isMock = predictions.data_mode === 'mock';
+  const groundMotion = load.groundMotion;
   const movementAvailable =
-    isMock || join.scored.some((f) => typeof f.properties.prediction?.factors.sar_velocity_mm_year === 'number');
+    isMock || !!groundMotion || join.scored.some((f) => typeof f.properties.prediction?.factors.sar_velocity_mm_year === 'number');
   const scoreIsProbability = join.scored.every((f) => f.properties.prediction!.probability === f.properties.prediction!.score);
   const movementOn = showMovement && movementAvailable;
 
@@ -189,6 +194,7 @@ export default function App() {
         visiblePriorities={visiblePriorities}
         capacityCutoff={shortlistOnly ? capacity : null}
         hexRadius={predictions.movement.aggregation_m}
+        externalMovement={groundMotion?.points ?? null}
         onSelect={(bin) => select(bin)}
         onUserInteract={demo.stop}
         onBasemapError={setBasemapError}
@@ -219,6 +225,11 @@ export default function App() {
             <span className="badge badge--ibm">
               <span className="badge__dot" aria-hidden />
               Predictions generated on {predictions.model.execution_platform}
+            </span>
+          )}
+          {!isMock && (
+            <span className="badge" title={load.source.url}>
+              Source: {load.source.label}
             </span>
           )}
           {isMock && (

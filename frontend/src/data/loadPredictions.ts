@@ -12,6 +12,7 @@ import type {
   SourceRef,
 } from '../types/predictions';
 import { normalisePriority, priorityFromScore } from './priority';
+import { PREDICTION_SOURCES, type PredictionSource } from '../config';
 
 export const PREDICTIONS_URL = `${import.meta.env.BASE_URL}data/mock-predictions.json`;
 
@@ -301,4 +302,23 @@ export async function loadPredictions(url = PREDICTIONS_URL, signal?: AbortSigna
     console.warn(`[predictions] ${set.rejected.length} record(s) skipped`, set.rejected.slice(0, 20));
   }
   return set;
+}
+
+/** Try each configured source in order (live API → LinuxONE snapshot → mock); report which one was used. */
+export async function loadPredictionsWithFallback(
+  signal?: AbortSignal,
+  sources: PredictionSource[] = PREDICTION_SOURCES,
+): Promise<{ set: PredictionSet; source: PredictionSource; failures: string[] }> {
+  const failures: string[] = [];
+  for (const source of sources) {
+    try {
+      const set = await loadPredictions(source.url, AbortSignal.any ? AbortSignal.any([signal ?? new AbortController().signal, AbortSignal.timeout(8000)]) : signal);
+      if (set.buildings.length === 0) throw new Error('no scored buildings');
+      return { set, source, failures };
+    } catch (err) {
+      if (signal?.aborted) throw err;
+      failures.push(`${source.label}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  throw new Error(`No prediction source could be loaded. ${failures.join(' · ')}`);
 }
