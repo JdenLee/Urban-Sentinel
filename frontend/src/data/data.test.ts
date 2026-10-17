@@ -4,9 +4,12 @@ import { DEFAULT_HEIGHT_M, joinByBin } from './joinByBin';
 import { parseBuildings } from './loadBuildings';
 import { binString, parsePredictions } from './loadPredictions';
 import { normalisePriority, priorityFromScore, PRIORITY_RANGE } from './priority';
-import { searchScored, shortlistCsv } from './shortlist';
+import { combineSearchResults, searchScored, shortlistCsv } from './shortlist';
 import { movementPoints } from '../layers/movementHexagonLayer';
 import { demoTimeline, DEMO_DURATION_MS } from '../components/DemoController';
+import { panelTabs } from '../components/BuildingPanel';
+import { parseGeosearch } from './geosearch';
+import { parseFootprint, parseHistory } from './loadHistory';
 
 const square = (x: number, y: number) => ({
   type: 'Polygon' as const,
@@ -352,5 +355,124 @@ describe('committed demo data', () => {
     const bins = buildings.features.map((f) => f.properties.bin);
     expect(bins.every((b) => typeof b === 'string' && /^1\d{6}$/.test(b))).toBe(true);
     expect(new Set(bins).size).toBe(bins.length);
+  });
+});
+
+describe('address search', () => {
+  const gs = (features: unknown[]) => ({ type: 'FeatureCollection', features });
+  const feat = (label: string, bin: unknown, coords = [-73.81, 40.73]) => ({
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: coords },
+    properties: { label, borough: 'Queens', addendum: { pad: { bin } } },
+  });
+
+  it('maps GeoSearch results to BINs, dropping placeholders, junk and duplicates', () => {
+    const out = parseGeosearch(
+      gs([
+        feat('67-43 KISSENA BOULEVARD, Flushing, NY, USA', '4455435'),
+        feat('67-45 KISSENA BOULEVARD, Flushing, NY, USA', '4455435'), // same building
+        feat('VACANT LOT, Queens, NY, USA', '4000000'), // DOB placeholder
+        feat('NO BIN, Queens, NY, USA', null),
+        { junk: true },
+      ]),
+    );
+    expect(out).toEqual([{ label: '67-43 KISSENA BOULEVARD, Flushing', bin: '4455435', borough: 'Queens', lonLat: [-73.81, 40.73] }]);
+    expect(parseGeosearch(null)).toEqual([]);
+  });
+
+  it('lists scene matches first, then other addresses, then a typed BIN', () => {
+    const b = footprints([{ bin: '1000001', address: '1 Wall Street' }]);
+    const j = joinByBin(b, contract([{ bin: '1000001', score: 0.9 }]));
+    const addrs = parseGeosearch(gs([feat('1 WALL STREET, Manhattan', '1000001'), feat('1 WALL ST COURT, Manhattan', '1001234')]));
+    expect(combineSearchResults(j.scored, addrs, 'wall').map((i) => [i.kind, i.bin])).toEqual([
+      ['scored', '1000001'],
+      ['address', '1001234'],
+    ]);
+    expect(combineSearchResults([], [], '4455435').map((i) => i.kind)).toEqual(['bin']);
+    expect(combineSearchResults([], [], '1000000')).toEqual([]); // placeholder BIN
+  });
+});
+
+describe('building history', () => {
+  const api = {
+    bin: '4455435',
+    in_fisp_universe: true,
+    address: '67-43 KISSENA BOULEVARD',
+    borough: 'Queens',
+    lat: 40.734,
+    lon: -73.813,
+    record: {
+      bin: '4455435',
+      address: '67-43 KISSENA BOULEVARD',
+      fisp: { status_on_record: 'UNSAFE', current_cycle: 10, current_cycle_filed: false, filing_window_closes: '2029-02-21' },
+      prediction: { probability: 0.9163, rank: 1, of: 13659, tier: 'high', scored_on: { machine: 's390x' } },
+      drivers: [{ feature: 'status_at_cutoff', label: 'Status on record now', value: 'UNSAFE', effect: 'raises', log_odds: 0.99 }],
+    },
+    records: [
+      { date: '2008-04-30', type: 'FISP filing', description: 'Cycle 6 initial: UNSAFE', status: 'UNSAFE' },
+      { date: '2020-01-24', type: 'FISP filing', description: 'Cycle 8 initial: UNSAFE', status: 'UNSAFE' },
+      { date: '2019-05-02', type: 'DOB violation', description: 'Façade (Local Law 11 / FISP)' },
+    ],
+    movement: {
+      meta: { source: 'NASA OPERA DISP-S1', baseline_label: 'Neighbourhood (~2 km)', period_start: '2016-07-16', period_end: '2025-11-26' },
+      series: [
+        { date: '2016-07-16', displacement_mm: 0, baseline_mm: 0 },
+        { date: '2016-09-26', displacement_mm: -1.2, baseline_mm: -0.4 },
+      ],
+      velocity_hp2km_mm_yr: -0.8,
+    },
+    sources: [{ name: 'FISP filings (xubg-57si)', observed_at: '2026-10-16' }],
+  };
+
+  it('parses a scored building with its citywide rank, records newest first, and movement', () => {
+    const h = parseHistory(api);
+    expect(h.prediction).toMatchObject({ bin: '4455435', score: 0.9163, rank: 1, rank_total: 13659, priority: 'critical' });
+    expect(h.fisp).toEqual({ statusOnRecord: 'UNSAFE', currentCycle: 10, currentCycleFiled: false, filingWindowCloses: '2029-02-21' });
+    expect(h.records.map((r) => r.date)).toEqual(['2020-01-24', '2019-05-02', '2008-04-30']);
+    expect(h.records[0].status).toBe('UNSAFE');
+    expect(h.movement?.points).toHaveLength(2);
+    expect(h.movement?.meta.baseline_label).toBe('Neighbourhood (~2 km)');
+    expect(h.lonLat).toEqual([-73.813, 40.734]);
+  });
+
+  it('keeps unscored and non-FISP buildings (history only)', () => {
+    const filed = parseHistory({ ...api, record: { ...api.record, prediction: null }, movement: null });
+    expect(filed.prediction).toBeNull();
+    expect(filed.fisp?.statusOnRecord).toBe('UNSAFE');
+    expect(filed.movement).toBeNull();
+    const outside = parseHistory({ bin: '1009999', in_fisp_universe: false, record: null, records: [], sources: [] });
+    expect(outside.inFisp).toBe(false);
+    expect(outside.fisp).toBeNull();
+    expect(() => parseHistory({ bin: 'nope' })).toThrow();
+  });
+
+  it('keeps export-time factors so real data can drive the movement layer', () => {
+    const set = parsePredictions({
+      data_mode: 'real',
+      buildings: [{ ...api.record, factors: { sar_velocity_mm_year: -0.8 } }],
+    });
+    expect(set.buildings[0].factors.sar_velocity_mm_year).toBe(-0.8);
+    expect(set.buildings[0].factors['Status on record now']).toBe('UNSAFE');
+  });
+
+  it('shows the model tabs only for scored buildings', () => {
+    expect(panelTabs(true)).toEqual(['overview', 'evidence', 'history']);
+    expect(panelTabs(false)).toEqual(['history']);
+  });
+
+  it('takes the largest part of a multi-record footprint and converts height to metres', () => {
+    const poly = (d: number) => ({ type: 'Polygon', coordinates: [[[0, 0], [d, 0], [d, d], [0, d], [0, 0]]] });
+    const fp = parseFootprint(
+      {
+        type: 'FeatureCollection',
+        features: [
+          { type: 'Feature', geometry: poly(0.0001), properties: { bin: '4455435', height_roof: '20' } },
+          { type: 'Feature', geometry: poly(0.00123456), properties: { bin: '4455435', height_roof: '100' } },
+        ],
+      },
+      '4455435',
+    );
+    expect(fp?.properties.height_m).toBeCloseTo(30.48);
+    expect(parseFootprint({ type: 'FeatureCollection', features: [] }, '4455435')).toBeNull();
   });
 });

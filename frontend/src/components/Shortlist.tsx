@@ -1,7 +1,16 @@
-import { useMemo, useState } from 'react';
-import type { JoinedFeature } from '../types/predictions';
+import { useEffect, useMemo, useState } from 'react';
+import type { JoinedFeature, LookupTarget } from '../types/predictions';
 import { PRIORITY_COLOR, rgbCss } from '../data/priority';
-import { ASSIGNMENT_LABEL, downloadText, searchScored, shortlistCsv, type AssignmentStatus } from '../data/shortlist';
+import {
+  ASSIGNMENT_LABEL,
+  combineSearchResults,
+  downloadText,
+  searchScored,
+  shortlistCsv,
+  type AssignmentStatus,
+  type SearchItem,
+} from '../data/shortlist';
+import { searchAddresses, type AddressMatch } from '../data/geosearch';
 
 export interface ShortlistProps {
   scored: JoinedFeature[];
@@ -16,21 +25,70 @@ export interface ShortlistProps {
 
 const CAPACITY_MAX = 100;
 
-export function SearchBox({ scored, onSelect }: { scored: JoinedFeature[]; onSelect: (bin: string) => void }) {
+const ADDRESS_MIN_CHARS = 3;
+const ADDRESS_DEBOUNCE_MS = 250;
+
+type AddressSearch = { status: 'idle' | 'loading' | 'error'; results: AddressMatch[] };
+
+/** Debounced, abortable NYC address suggestions (GeoSearch); skipped for empty or digits-only queries. */
+function useAddressSearch(query: string): AddressSearch {
+  const [state, setState] = useState<AddressSearch>({ status: 'idle', results: [] });
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < ADDRESS_MIN_CHARS || /^\d+$/.test(q)) {
+      setState({ status: 'idle', results: [] });
+      return;
+    }
+    const ctrl = new AbortController();
+    setState((s) => ({ status: 'loading', results: s.results }));
+    const timer = window.setTimeout(() => {
+      searchAddresses(q, ctrl.signal)
+        .then((results) => setState({ status: 'idle', results }))
+        .catch(() => {
+          if (!ctrl.signal.aborted) setState({ status: 'error', results: [] });
+        });
+    }, ADDRESS_DEBOUNCE_MS);
+    return () => {
+      window.clearTimeout(timer);
+      ctrl.abort();
+    };
+  }, [query]);
+  return state;
+}
+
+export interface SearchBoxProps {
+  scored: JoinedFeature[];
+  /** A scored building already in the scene. */
+  onSelect: (bin: string) => void;
+  /** Any other NYC building, from an address suggestion or a typed BIN. */
+  onLookup: (target: LookupTarget) => void;
+}
+
+export function SearchBox({ scored, onSelect, onLookup }: SearchBoxProps) {
   const [q, setQ] = useState('');
   const [active, setActive] = useState(0);
-  const results = useMemo(() => searchScored(scored, q), [scored, q]);
-  const choose = (bin: string) => {
-    onSelect(bin);
+  const local = useMemo(() => searchScored(scored, q, 5), [scored, q]);
+  const addresses = useAddressSearch(q);
+  const results = useMemo(() => combineSearchResults(local, addresses.results, q), [local, addresses.results, q]);
+  const choose = (item: SearchItem) => {
+    if (item.kind === 'scored') onSelect(item.bin);
+    else if (item.kind === 'address') onLookup({ bin: item.bin, label: item.label, lonLat: item.match.lonLat });
+    else onLookup({ bin: item.bin, label: null, lonLat: null });
     setQ('');
   };
+  const empty =
+    addresses.status === 'loading'
+      ? 'Searching NYC addresses…'
+      : addresses.status === 'error'
+        ? 'Address search unavailable; try a BIN.'
+        : 'No match. Try a street address or a 7-digit BIN.';
   return (
     <div className="search" role="search">
       <input
         type="search"
         className="search__input"
-        placeholder="Search address or BIN"
-        aria-label="Search scored buildings by address or BIN"
+        placeholder="Search any NYC address or BIN"
+        aria-label="Search buildings by address or BIN"
         value={q}
         onChange={(e) => {
           setQ(e.target.value);
@@ -39,7 +97,7 @@ export function SearchBox({ scored, onSelect }: { scored: JoinedFeature[]; onSel
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown') setActive((a) => Math.min(a + 1, results.length - 1));
           else if (e.key === 'ArrowUp') setActive((a) => Math.max(a - 1, 0));
-          else if (e.key === 'Enter' && results[active]) choose(results[active].properties.bin);
+          else if (e.key === 'Enter' && results[active]) choose(results[active]);
           else if (e.key === 'Escape') {
             e.stopPropagation();
             setQ('');
@@ -48,24 +106,31 @@ export function SearchBox({ scored, onSelect }: { scored: JoinedFeature[]; onSel
       />
       {q.trim() && (
         <ul className="search__results" role="listbox">
-          {results.length === 0 && <li className="search__empty">No scored building matches.</li>}
-          {results.map((f, i) => {
-            const p = f.properties.prediction!;
-            return (
-              <li key={f.properties.bin} role="option" aria-selected={i === active}>
-                <button
-                  type="button"
-                  className={`search__item${i === active ? ' is-active' : ''}`}
-                  onMouseEnter={() => setActive(i)}
-                  onClick={() => choose(f.properties.bin)}
-                >
-                  <span className="swatch swatch--sm" style={{ background: rgbCss(PRIORITY_COLOR[p.priority]) }} />
-                  <span className="search__addr">{f.properties.address ?? 'Address unavailable'}</span>
-                  <span className="search__bin mono">{f.properties.bin}</span>
-                </button>
-              </li>
-            );
-          })}
+          {results.length === 0 && <li className="search__empty">{empty}</li>}
+          {results.map((item, i) => (
+            <li key={`${item.kind}-${item.bin}`} role="option" aria-selected={i === active}>
+              <button
+                type="button"
+                className={`search__item${i === active ? ' is-active' : ''}`}
+                onMouseEnter={() => setActive(i)}
+                onClick={() => choose(item)}
+              >
+                {item.kind === 'scored' ? (
+                  <span
+                    className="swatch swatch--sm"
+                    style={{ background: rgbCss(PRIORITY_COLOR[item.feature.properties.prediction!.priority]) }}
+                  />
+                ) : (
+                  <span className="swatch swatch--sm swatch--hollow" aria-hidden />
+                )}
+                <span className="search__addr">{item.label}</span>
+                <span className="search__bin mono">{item.kind === 'bin' ? '' : item.bin}</span>
+              </button>
+            </li>
+          ))}
+          {results.length > 0 && addresses.status === 'loading' && (
+            <li className="search__empty">Searching NYC addresses…</li>
+          )}
         </ul>
       )}
     </div>

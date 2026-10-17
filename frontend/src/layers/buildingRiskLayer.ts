@@ -23,6 +23,11 @@ export interface BuildingLayerOptions {
   capacityCutoff: number | null;
   /** 0..1 pulse phase for the selection beacon. */
   pulse: number;
+  /**
+   * Selected building that is not a scored footprint: a context footprint, or one fetched for a looked-up
+   * address outside the demo area (`external`; drawn as its own body because the scene has no footprint).
+   */
+  highlight?: { feature: JoinedFeature; external: boolean } | null;
 }
 
 const FILTERED: RGBA = [...FILTERED_COLOR, 255];
@@ -37,13 +42,14 @@ function riskColor(f: JoinedFeature, o: BuildingLayerOptions): RGBA {
 }
 
 /**
- * Three layers:
- *  - context: every unscored demo footprint, static muted gray (not pickable, never re-coloured)
+ * Layers:
+ *  - context: every unscored demo footprint, muted gray; pickable so any building can open its history
  *  - scored: buildings with predictions, coloured by priority with a gray → colour transition
+ *  - external highlight: a looked-up building outside the demo area, drawn in the selection colour
  *  - selection: wireframe shell plus a light beam above the selected building
  */
 export function buildingRiskLayers(options: BuildingLayerOptions): Layer[] {
-  const { context, scored, showRisk, selectedBin, visiblePriorities, capacityCutoff, pulse } = options;
+  const { context, scored, showRisk, selectedBin, visiblePriorities, capacityCutoff, pulse, highlight } = options;
   const filterKey = [...visiblePriorities].sort().join(',');
   const layers: Layer[] = [
     new GeoJsonLayer<JoinedFeature['properties']>({
@@ -53,9 +59,12 @@ export function buildingRiskLayers(options: BuildingLayerOptions): Layer[] {
       filled: true,
       stroked: false,
       getElevation: (f) => f.properties.height_m,
-      getFillColor: CONTEXT_FILL,
+      getFillColor: (f) => (f.properties.bin === selectedBin ? [...SELECTED_COLOR, 255] : CONTEXT_FILL),
       material: MATERIAL,
-      pickable: false,
+      pickable: true,
+      autoHighlight: true,
+      highlightColor: [255, 255, 255, 40],
+      updateTriggers: { getFillColor: [selectedBin] },
     }),
     new GeoJsonLayer<JoinedFeature['properties']>({
       id: 'scored-buildings',
@@ -74,7 +83,24 @@ export function buildingRiskLayers(options: BuildingLayerOptions): Layer[] {
     }),
   ];
 
-  const selected = selectedBin ? scored.find((f) => f.properties.bin === selectedBin) : undefined;
+  if (highlight?.external) {
+    layers.push(
+      new GeoJsonLayer<JoinedFeature['properties']>({
+        id: 'external-highlight',
+        data: [highlight.feature],
+        extruded: true,
+        filled: true,
+        stroked: false,
+        getElevation: highlight.feature.properties.height_m + 1,
+        getFillColor: [...SELECTED_COLOR, 255],
+        material: MATERIAL,
+        pickable: false,
+      }),
+    );
+  }
+
+  const selected =
+    (selectedBin ? scored.find((f) => f.properties.bin === selectedBin) : undefined) ?? highlight?.feature;
   if (selected) {
     const top = selected.properties.height_m;
     layers.push(

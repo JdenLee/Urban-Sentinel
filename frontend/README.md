@@ -22,15 +22,18 @@ Datathon, and the predictions are meant to run on IBM LinuxONE.
 **Demo MVP (this branch)**
 - 10,291 real footprints, extruded by roof height. Scored buildings are coloured Low / Medium / High / Critical, and
   the legend doubles as a category filter.
-- **Building panel** with three tabs:
+- **Building panel** with three tabs (scored buildings) or just History (any other building):
   - **Overview:** priority score with its uncertainty range, predicted probability, data completeness, the top three
     warning signals, consequence inputs (occupancy, floors, pedestrian exposure) and inspection status.
-  - **Evidence:** signed per-feature contributions (SHAP-style), the LOS displacement chart against its
-    seasonal/thermal baseline, angular distortion, and the model inputs.
-  - **Records & data:** filing, violation and complaint history, missing inputs, and each source with its
-    observation date.
+  - **Evidence:** signed per-feature contributions (SHAP-style), angular distortion, and the model inputs.
+  - **History:** FISP status on record, the satellite ground-movement chart (building vs its ~2 km neighbourhood,
+    2016 → latest), every FISP filing plus DOB/ECB façade violations and 311 façade complaints (with type filters),
+    and each source with its observation date. Movement is context only: it is not a model input.
+- **Look up any NYC building:**
+  - Type an address (NYC GeoSearch suggestions) or a 7-digit BIN. Scored buildings in the scene come first.
+  - Outside the Lower Manhattan scene the camera flies there and draws that building's footprint (fetched by BIN).
+  - Click any footprint in the scene, scored or not, to open its history.
 - **Operational tools:**
-  - address/BIN search
   - an inspection-capacity slider with a ranked shortlist and an option to colour only the shortlist on the map
   - per-building assignment status (Unassigned / Assigned / Inspected / Deferred, stored in this browser only)
   - CSV export of the shortlist
@@ -47,7 +50,7 @@ Datathon, and the predictions are meant to run on IBM LinuxONE.
 - Flood and storm-surge scenario overlays
 - Alert markers for threshold crossings, and recorded outcomes for closing the loop
 - Shared, server-side assignment and work-order status instead of per-browser storage
-- An all-borough footprint coverage
+- An all-borough footprint coverage (today: lookups anywhere, but only the demo area is drawn in full)
 
 Each roadmap item depends on new fields in the prediction export. The frontend already ignores fields it doesn't
 know, so they can be added one at a time.
@@ -57,15 +60,20 @@ know, so they can be added one at a time.
 ```bash
 cd frontend
 npm install
+cp .env.example .env.local   # VITE_API_URL: live predictions + building history (default http://localhost:8000)
 npm run dev        # http://localhost:5173
 ```
+
+Building history comes from the same ML API (`GET /buildings/{bin}/history`). Run it locally from `ml/`
+(`uvicorn urban_sentinel.serve:app --port 8000`) or tunnel to the LinuxONE deployment, and point `VITE_API_URL` at
+it. Without it the scene, snapshot scores, search and demo still work, and the History tab says what is missing.
 
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Vite dev server |
 | `npm run build` | Type-check (`tsc -b`) and production build to `dist/` |
 | `npm run preview` | Serve the production build |
-| `npm test` | Vitest (27 tests): BIN join, thresholds, validation, optional fields, ML adapter, search, CSV export, demo determinism, committed-data checks |
+| `npm test` | Vitest: BIN join, thresholds, validation, optional fields, ML adapter, search (scene + address + BIN), history parsing, footprint lookup, CSV export, demo determinism, committed-data checks |
 | `npm run prepare-buildings` | Rebuild `public/data/buildings-demo.geojson` from NYC Open Data |
 | `npm run generate-mock` | Rebuild `public/data/mock-predictions.json` (deterministic, seed 20261017) |
 
@@ -78,10 +86,11 @@ renders the scored buildings.
 - **761–1100 px:** the sidebar becomes a drawer (☰) and closes automatically when a building opens.
 - **760 px and below:** the building panel becomes a bottom sheet.
 
-## Replacing mock predictions with real model output
+## Prediction file contracts
 
-Overwrite `public/data/mock-predictions.json` with the backend export. No code changes are needed. Only `bin` and
-`score` are required; every other field is optional, and the UI hides any section whose data is missing.
+Real predictions come from the sources listed under "Real data from IBM LinuxONE" below (live API, exported snapshot,
+then mock). Any file in either contract works: only `bin` and `score` are required, and the UI hides any section
+whose data is missing.
 
 **Mock vs real data.**
 - With `"data_mode": "mock"`, the UI shows a **Mock data** badge and a dashed **Target runtime: IBM LinuxONE** badge.
