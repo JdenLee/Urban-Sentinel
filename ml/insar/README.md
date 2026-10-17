@@ -81,7 +81,44 @@ ml/insar/.venv/bin/python ml/insar/build_features.py --stack-dir data/insar/F086
 ml/insar/.venv/bin/python ml/insar/quality_report.py --stack-dir data/insar/F08622_nyc --cutoff 2020-02-21
 ```
 
-Only `data/insar/insar_features_cutoff_2020-02-21.csv.gz` (~2 MB) needs to go to the VM.
+Only `data/insar/insar_features_cutoff_2020-02-21.csv.gz` (~2 MB) needs to go to the VM for the ML ablation.
+
+### Building-history series for the frontend (visualization only, 2016 → latest)
+
+```bash
+# Same downloader, no cutoff: existing granules are skipped, newer ones are added (~170 more, ~3.4 GB transfer)
+ml/insar/.venv/bin/python ml/insar/download_subset.py --frame-id 8622 \
+    --bbox -74.205 40.532 -73.703 40.920 --start 2016-07-01 --end <today> \
+    --out-dir data/insar/F08622_nyc --workers 8
+ml/insar/.venv/bin/python ml/insar/fetch_bperp.py --stack-dir data/insar/F08622_nyc
+ml/insar/.venv/bin/python ml/insar/export_series.py --stack-dir data/insar/F08622_nyc \
+    --buildings data/insar/ref/fisp_buildings.csv.gz --out data/insar/movement_series.npz
+```
+
+`movement_series.npz` (+ `.json` metadata) holds, per FISP BIN and epoch, the building's LOS displacement (median of
+its good pixels, same processing as the features) and its ~2 km neighbourhood background, plus the full-period
+building-minus-neighbourhood velocity. The API serves it at `GET /buildings/{bin}/history`, and
+`python -m urban_sentinel.export_frontend` copies the velocity into the frontend's movement layer. Ship the `.npz` and
+`.json` to the VM's `data/insar/` for the history chart. The pre-cutoff feature file is unaffected: `build_features.py`
+still reads only granules before its cutoff.
+
+### Map layer for the 3D frontend (visualization only)
+
+```bash
+ml/insar/.venv/bin/python ml/insar/export_map_layer.py   # -> data/outputs/insar_ground_motion.geojson (~4 MB)
+```
+
+One Point per FISP building whose measurement passes the quality filters:
+- ≥ 3 good pixels within 50 m
+- good-pixel share ≥ 0.5
+- temporal coherence ≥ 0.7
+- not in layover or shadow
+- |v| ≤ 5 mm/yr; beyond that it's construction sites and water edges
+
+The velocity is the ramp-free ~2 km high-pass (pre-cutoff window, 2016-09-26 → 2020-02-14). The file's `metadata` records
+units, sign, frame, observation window, filters with kept/dropped counts, CMR provenance and the limitations. Values are
+measured only; nothing is interpolated. On 2026-10-17 it held 16,414 of 16,905 buildings, 228 of them with
+|v| > 2·SE.
 
 ## Processing (what `build_features.py` does)
 
@@ -174,4 +211,6 @@ Sign: positive = motion toward the satellite (≈ uplift), negative = away (≈ 
 | `fetch_bperp.py` | per-epoch perpendicular baseline |
 | `build_features.py` | correction, chaining, re-referencing, fits, per-BIN features, quality JSON |
 | `quality_report.py` | `QUALITY_REPORT.md`, `figures/`, `sample_features.txt` |
+| `export_series.py` | per-BIN displacement series, 2016 → latest, for the frontend's building history |
+| `export_map_layer.py` | quality-filtered ground-motion GeoJSON for the 3D map (`data/outputs/insar_ground_motion.geojson`, served at `/layers/ground-motion.geojson`); `sample_map_layer.geojson` is a 20-feature sample |
 | `requirements.txt` | pinned versions used |

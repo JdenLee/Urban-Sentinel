@@ -15,7 +15,7 @@ import pandas as pd
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import evidence, score
+from . import evidence, history, score
 from .artifacts import DeployedModel
 from .config import OUTPUT_DIR, REPORTS_DIR, cycle_at
 from .export_frontend import GROUND_MOTION_FILE, LOWER_MANHATTAN_BBOX, frontend_payload
@@ -52,6 +52,7 @@ state = State()
 app = FastAPI(title="Urban Sentinel façade model", version=state.model.meta["model_sha256"])
 app.add_middleware(CORSMiddleware, allow_origins=os.environ.get("URBAN_SENTINEL_CORS", DEFAULT_ORIGINS).split(","),
                    allow_methods=["GET", "POST"], allow_headers=["*"])
+app.include_router(history.build_router(lambda: state))  # GET /buildings/{bin}/history
 
 
 @app.get("/health")

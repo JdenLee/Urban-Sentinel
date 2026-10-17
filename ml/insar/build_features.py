@@ -143,27 +143,34 @@ def rebase_chain(disp: np.ndarray, man: pd.DataFrame) -> tuple[np.ndarray, list[
     return disp, issues
 
 
+def background_coarse(img: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """Robust ~2 km background on the block grid: 300 m block medians of masked pixels, then a
+    2.1 km (7x7-block) moving median. Pixel (r, c) maps to block (r // HP_BLOCK_PX, c // HP_BLOCK_PX)."""
+    from numpy.lib.stride_tricks import sliding_window_view
+
+    H, W = img.shape
+    b, k = HP_BLOCK_PX, HP_WIN_BLOCKS
+    Hb, Wb = -(-H // b), -(-W // b)
+    v = np.full((Hb * b, Wb * b), np.nan, np.float32)
+    v[:H, :W] = np.where(mask, img, np.nan)
+    with np.errstate(all="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        coarse = np.nanmedian(v.reshape(Hb, b, Wb, b).transpose(0, 2, 1, 3).reshape(Hb, Wb, -1), axis=-1)
+        cp = np.pad(coarse, k // 2, constant_values=np.nan)
+        return np.nanmedian(sliding_window_view(cp, (k, k)).reshape(Hb, Wb, -1), axis=-1).astype(np.float32)
+
+
 def highpass_velocity(vel: np.ndarray, good: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Velocity minus a ~2 km robust background (300 m block medians, 2.1 km moving median).
+    """Velocity minus its ~2 km robust background (`background_coarse`).
 
     Removes long-wavelength artefacts (residual troposphere/ionosphere ramps, which here
     reach several mm/yr across the 45 km window and would otherwise act as a borough
     proxy) while keeping fill/landfill-scale signals such as runways or stadium bowls.
     """
-    from numpy.lib.stride_tricks import sliding_window_view
-
     H, W = vel.shape
-    b, k = HP_BLOCK_PX, HP_WIN_BLOCKS
-    Hb, Wb = -(-H // b), -(-W // b)
-    v = np.full((Hb * b, Wb * b), np.nan, np.float32)
-    v[:H, :W] = np.where(good, vel, np.nan)
-    with np.errstate(all="ignore"), warnings.catch_warnings():
-        warnings.simplefilter("ignore", RuntimeWarning)
-        coarse = np.nanmedian(v.reshape(Hb, b, Wb, b).transpose(0, 2, 1, 3).reshape(Hb, Wb, -1), axis=-1)
-        cp = np.pad(coarse, k // 2, constant_values=np.nan)
-        bg = np.nanmedian(sliding_window_view(cp, (k, k)).reshape(Hb, Wb, -1), axis=-1)
-    bg_px = bg[np.arange(H) // b][:, np.arange(W) // b]
-    return (vel - bg_px).astype(np.float32), bg_px.astype(np.float32)
+    bg = background_coarse(vel, good)
+    bg_px = bg[np.arange(H) // HP_BLOCK_PX][:, np.arange(W) // HP_BLOCK_PX]
+    return (vel - bg_px).astype(np.float32), bg_px
 
 
 def wls_fit(t: np.ndarray, d: np.ndarray, w: np.ndarray, quadratic: bool,
