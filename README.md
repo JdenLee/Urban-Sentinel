@@ -1,6 +1,6 @@
 # megatron
 
-Datathon project (Kason, Jayden, Aaron).
+Datathon project (Kason, Jayden, Aaron, Tina).
 
 ## Workflow
 - Write code on your laptop, push to GitHub.
