@@ -1,0 +1,11 @@
+# data and secrets: never commit these
+data/
+*.csv
+*.parquet
+*.env
+.env
+*.pem
+id_*
+__pycache__/
+.venv/
+.DS_Store
