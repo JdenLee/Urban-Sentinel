@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.cache/
+*.local
+
+# The repo root ignores data/ (raw ML data); the small prepared demo data must be committed.
+!public/data/
+!src/data/
