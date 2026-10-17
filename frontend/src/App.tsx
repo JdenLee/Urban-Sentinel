@@ -4,17 +4,33 @@ import { MapScene } from './components/MapScene';
 import { BuildingPanel } from './components/BuildingPanel';
 import { LayerControls } from './components/LayerControls';
 import { RiskLegend } from './components/RiskLegend';
+import { SearchBox, Shortlist } from './components/Shortlist';
+import { MovementLegend } from './components/MovementLegend';
+import { ModelCardDialog } from './components/ModelCard';
 import { DemoController, useDemoRunner, type DemoTarget } from './components/DemoController';
 import { loadBuildings } from './data/loadBuildings';
 import { loadPredictions } from './data/loadPredictions';
 import { featureCentroid, joinByBin } from './data/joinByBin';
+import { useAssignments } from './data/shortlist';
 import { INITIAL_CAMERA, prefersReducedMotion } from './camera';
-import type { JoinResult, PredictionSet } from './types/predictions';
+import { PRIORITIES, type JoinResult, type PredictionSet, type Priority } from './types/predictions';
+
+export const APP_TITLE = 'NYC Façade Early-Warning System';
 
 type LoadState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
   | { status: 'ready'; join: JoinResult; predictions: PredictionSet };
+
+/** Below this width the sidebar and building panel cannot both fit beside the map. */
+const NARROW_QUERY = '(max-width: 1100px)';
+const isNarrow = () => typeof window !== 'undefined' && window.matchMedia?.(NARROW_QUERY).matches === true;
+
+const fmtDate = (s: string | null) => {
+  if (!s) return '—';
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? s : d.toISOString().slice(0, 10);
+};
 
 export default function App() {
   const [load, setLoad] = useState<LoadState>({ status: 'loading' });
@@ -23,7 +39,13 @@ export default function App() {
   const [showMovement, setShowMovement] = useState(false);
   const [selectedBin, setSelectedBin] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => !isNarrow());
+  const [modelCardOpen, setModelCardOpen] = useState(false);
+  const [visiblePriorities, setVisiblePriorities] = useState<Set<Priority>>(() => new Set(PRIORITIES));
+  const [capacity, setCapacity] = useState(25);
+  const [shortlistOnly, setShortlistOnly] = useState(false);
   const [basemapError, setBasemapError] = useState<string | null>(null);
+  const assignments = useAssignments();
   const mapRef = useRef<MapRef>(null);
 
   useEffect(() => {
@@ -55,26 +77,38 @@ export default function App() {
   const getActions = useCallback(() => {
     const map = mapRef.current?.getMap();
     if (!map) return null;
-    return { map, target: demoTarget, setShowRisk, setShowMovement, setSelectedBin, setPanelOpen };
+    const openPanel = (v: boolean) => {
+      setPanelOpen(v);
+      if (v && isNarrow()) setSidebarOpen(false);
+    };
+    return { map, target: demoTarget, setShowRisk, setShowMovement, setSelectedBin, setPanelOpen: openPanel };
   }, [demoTarget]);
   const demo = useDemoRunner(getActions);
 
+  const startDemo = useCallback(() => {
+    // The demo tells the full story, so clear any filters first.
+    setVisiblePriorities(new Set(PRIORITIES));
+    setShortlistOnly(false);
+    setModelCardOpen(false);
+    demo.start();
+  }, [demo]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (demo.running) demo.stop();
-        else setPanelOpen(false);
-      }
+      if (e.key !== 'Escape' || modelCardOpen) return;
+      if (demo.running) demo.stop();
+      else setPanelOpen(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [demo]);
+  }, [demo, modelCardOpen]);
 
   const select = useCallback(
     (bin: string | null, fly = false) => {
       demo.stop();
       setSelectedBin(bin);
       setPanelOpen(bin !== null);
+      if (bin && isNarrow()) setSidebarOpen(false);
       const f = bin ? join?.scored.find((s) => s.properties.bin === bin) : undefined;
       const map = mapRef.current?.getMap();
       if (fly && f && map) {
@@ -82,7 +116,7 @@ export default function App() {
           center: featureCentroid(f),
           zoom: Math.max(map.getZoom(), 16.2),
           pitch: 60,
-          padding: { top: 40, bottom: 40, left: 40, right: 420 },
+          padding: isNarrow() ? { top: 40, bottom: 40, left: 20, right: 20 } : { top: 40, bottom: 40, left: 340, right: 420 },
           duration: prefersReducedMotion() ? 0 : 2200,
         });
       }
@@ -101,11 +135,20 @@ export default function App() {
     });
   }, [demo]);
 
+  const togglePriority = useCallback((p: Priority) => {
+    setVisiblePriorities((prev) => {
+      const next = new Set(prev);
+      if (next.has(p)) next.delete(p);
+      else next.add(p);
+      return next.size ? next : new Set(PRIORITIES);
+    });
+  }, []);
+
   if (load.status !== 'ready' || !join || !predictions) {
     return (
       <div className="splash">
         <div className="splash__card">
-          <h1 className="title">NYC Structural Risk Digital Twin</h1>
+          <h1 className="title">{APP_TITLE}</h1>
           {load.status === 'loading' ? (
             <p className="muted">
               <span className="spinner" aria-hidden /> Loading building footprints and predictions…
@@ -131,16 +174,21 @@ export default function App() {
   const isMock = predictions.data_mode === 'mock';
   const movementAvailable =
     isMock || join.scored.some((f) => typeof f.properties.prediction?.factors.sar_velocity_mm_year === 'number');
+  const scoreIsProbability = join.scored.every((f) => f.properties.prediction!.probability === f.properties.prediction!.score);
+  const movementOn = showMovement && movementAvailable;
 
   return (
-    <div className={`app${demo.running ? ' app--demo' : ''}`}>
+    <div className={`app${demo.running ? ' app--demo' : ''}${sidebarOpen ? ' app--sidebar' : ''}${panelOpen && selectedFeature ? ' app--panel' : ''}`}>
       <MapScene
         ref={mapRef}
         join={join}
         dataMode={predictions.data_mode}
         showRisk={showRisk}
-        showMovement={showMovement && movementAvailable}
+        showMovement={movementOn}
         selectedBin={selectedBin}
+        visiblePriorities={visiblePriorities}
+        capacityCutoff={shortlistOnly ? capacity : null}
+        hexRadius={predictions.movement.aggregation_m}
         onSelect={(bin) => select(bin)}
         onUserInteract={demo.stop}
         onBasemapError={setBasemapError}
@@ -148,44 +196,113 @@ export default function App() {
       <div className="vignette" aria-hidden />
 
       <header className="topbar">
+        <button
+          type="button"
+          className="icon-btn drawer-btn"
+          aria-label={sidebarOpen ? 'Hide controls' : 'Show controls'}
+          aria-expanded={sidebarOpen}
+          aria-controls="sidebar"
+          onClick={() => setSidebarOpen((v) => !v)}
+        >
+          <span aria-hidden>{sidebarOpen ? '‹' : '☰'}</span>
+        </button>
         <div className="brand">
-          <h1 className="title">NYC Structural Risk Digital Twin</h1>
-          <p className="subtitle">Façade inspection priority · Lower Manhattan</p>
+          <h1 className="title">{APP_TITLE}</h1>
+          <p className="subtitle">Façade inspection priority · Lower Manhattan · data-driven, not a structural simulation</p>
         </div>
         <div className="badges">
-          <span className="badge badge--ibm">
-            <span className="badge__dot" aria-hidden />
-            Predictions generated on {predictions.model.execution_platform}
-          </span>
+          {isMock ? (
+            <span className="badge badge--runtime" title="Mock predictions were not produced by the model">
+              Target runtime: {predictions.model.execution_platform}
+            </span>
+          ) : (
+            <span className="badge badge--ibm">
+              <span className="badge__dot" aria-hidden />
+              Predictions generated on {predictions.model.execution_platform}
+            </span>
+          )}
           {isMock && (
             <span className="badge badge--mock" title="Synthetic demonstration values, not model output">
               Mock data
             </span>
           )}
+          <button type="button" className="badge badge--btn" onClick={() => setModelCardOpen(true)}>
+            Model card
+          </button>
         </div>
       </header>
 
-      <aside className="panel sidebar">
+      <aside id="sidebar" className="panel sidebar" aria-label="Map controls" hidden={!sidebarOpen}>
+        <SearchBox scored={join.scored} onSelect={(bin) => select(bin, true)} />
         <LayerControls
           showRisk={showRisk}
-          showMovement={showMovement && movementAvailable}
+          showMovement={movementOn}
           movementAvailable={movementAvailable}
           demoRunning={demo.running}
           onToggleRisk={() => setShowRisk((v) => !v)}
           onToggleMovement={() => setShowMovement((v) => !v)}
-          onPlayDemo={demo.start}
+          onPlayDemo={startDemo}
           onReset={resetView}
         />
-        <RiskLegend scored={join.scored} selectedBin={selectedBin} onSelect={(bin) => select(bin, true)} />
-        <p className="sidebar__foot muted small">
-          {join.scored.length} scored of {join.features.length.toLocaleString()} buildings · model{' '}
-          <span className="mono">{predictions.model.version}</span>
-        </p>
+        <RiskLegend
+          scored={join.scored}
+          visible={visiblePriorities}
+          scoreLabel={scoreIsProbability ? 'Probability' : 'Score 0–1'}
+          onToggle={togglePriority}
+        />
+        <Shortlist
+          scored={join.scored}
+          capacity={capacity}
+          shortlistOnly={shortlistOnly}
+          selectedBin={selectedBin}
+          status={assignments.get}
+          onCapacity={setCapacity}
+          onShortlistOnly={setShortlistOnly}
+          onSelect={(bin) => select(bin, true)}
+        />
+        <dl className="kv kv--tight sidebar__foot">
+          <div className="kv__row">
+            <dt>Data as of</dt>
+            <dd className="mono">{fmtDate(predictions.data_as_of)}</dd>
+          </div>
+          <div className="kv__row">
+            <dt>Model trained through</dt>
+            <dd className="mono">{fmtDate(predictions.model.trained_through)}</dd>
+          </div>
+          <div className="kv__row">
+            <dt>Last refresh</dt>
+            <dd className="mono">{fmtDate(predictions.generated_at)}</dd>
+          </div>
+          <div className="kv__row">
+            <dt>Model</dt>
+            <dd className="mono">{predictions.model.version}</dd>
+          </div>
+          <div className="kv__row">
+            <dt>Coverage</dt>
+            <dd className="mono">
+              {join.scored.length} / {join.features.length.toLocaleString()} bldgs
+            </dd>
+          </div>
+        </dl>
       </aside>
 
+      {movementOn && <MovementLegend meta={predictions.movement} mode={predictions.data_mode} />}
+
       {panelOpen && selectedFeature && (
-        <BuildingPanel feature={selectedFeature} total={predictions.buildings.length} onClose={() => setPanelOpen(false)} />
+        <BuildingPanel
+          key={selectedFeature.properties.bin}
+          feature={selectedFeature}
+          total={predictions.buildings.length}
+          capacity={capacity}
+          modelCard={predictions.model_card}
+          status={assignments.get(selectedFeature.properties.bin)}
+          onStatusChange={(s) => assignments.set(selectedFeature.properties.bin, s)}
+          onOpenModelCard={() => setModelCardOpen(true)}
+          onClose={() => setPanelOpen(false)}
+        />
       )}
+
+      {modelCardOpen && <ModelCardDialog predictions={predictions} onClose={() => setModelCardOpen(false)} />}
 
       <DemoController running={demo.running} elapsed={demo.elapsed} stage={demo.stage} onStop={demo.stop} />
 

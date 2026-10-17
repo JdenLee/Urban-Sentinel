@@ -4,7 +4,7 @@ import { MapboxOverlay, type MapboxOverlayProps } from '@deck.gl/mapbox';
 import type { PickingInfo } from '@deck.gl/core';
 import type { StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import type { DataMode, JoinedFeature, JoinResult } from '../types/predictions';
+import type { DataMode, JoinedFeature, JoinResult, Priority } from '../types/predictions';
 import { buildingRiskLayers } from '../layers/buildingRiskLayer';
 import { movementHexagonLayer, movementPoints } from '../layers/movementHexagonLayer';
 import { PRIORITY_LABEL } from '../data/priority';
@@ -88,13 +88,28 @@ export interface MapSceneProps {
   showRisk: boolean;
   showMovement: boolean;
   selectedBin: string | null;
+  visiblePriorities: Set<Priority>;
+  capacityCutoff: number | null;
+  hexRadius: number;
   onSelect: (bin: string | null) => void;
   onUserInteract: () => void;
   onBasemapError: (message: string) => void;
 }
 
 export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
-  { join, dataMode, showRisk, showMovement, selectedBin, onSelect, onUserInteract, onBasemapError },
+  {
+    join,
+    dataMode,
+    showRisk,
+    showMovement,
+    selectedBin,
+    visiblePriorities,
+    capacityCutoff,
+    hexRadius,
+    onSelect,
+    onUserInteract,
+    onBasemapError,
+  },
   ref,
 ) {
   const mapStyle = useBasemapStyle(onBasemapError);
@@ -117,10 +132,18 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
 
   const layers = useMemo(
     () => [
-      movementHexagonLayer(points, showMovement),
-      ...buildingRiskLayers({ context, scored: join.scored, showRisk, selectedBin, pulse }),
+      movementHexagonLayer(points, showMovement, hexRadius),
+      ...buildingRiskLayers({
+        context,
+        scored: join.scored,
+        showRisk,
+        selectedBin,
+        visiblePriorities,
+        capacityCutoff,
+        pulse,
+      }),
     ],
-    [points, showMovement, context, join.scored, showRisk, selectedBin, pulse],
+    [points, showMovement, hexRadius, context, join.scored, showRisk, selectedBin, visiblePriorities, capacityCutoff, pulse],
   );
 
   const onClick = useCallback(

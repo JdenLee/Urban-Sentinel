@@ -34,21 +34,24 @@ export function movementPoints(features: JoinedFeature[], mode: DataMode): Movem
   return out;
 }
 
-const MOVEMENT_COLORS: [number, number, number][] = [
-  [20, 60, 110],
-  [24, 120, 170],
-  [40, 190, 200],
-  [160, 230, 170],
-  [250, 200, 80],
-  [255, 110, 60],
+/** Purple → magenta → white: deliberately disjoint from the blue/yellow/orange/red priority ramp. */
+export const MOVEMENT_COLORS: [number, number, number][] = [
+  [38, 22, 74],
+  [84, 36, 132],
+  [140, 52, 170],
+  [199, 80, 190],
+  [240, 140, 220],
+  [255, 220, 250],
 ];
+/** Colour domain, mm/yr of absolute LOS velocity. */
+export const MOVEMENT_DOMAIN: [number, number] = [0.4, 5];
 
-export function movementHexagonLayer(points: MovementPointDatum[], visible: boolean) {
+export function movementHexagonLayer(points: MovementPointDatum[], visible: boolean, radius = 60) {
   return new HexagonLayer<MovementPointDatum>({
     id: 'satellite-movement',
     data: points,
     visible,
-    radius: 60,
+    radius,
     coverage: 0.86,
     extruded: true,
     elevationScale: visible ? 1 : 0,
@@ -58,10 +61,10 @@ export function movementHexagonLayer(points: MovementPointDatum[], visible: bool
     getElevationWeight: (d) => d.speed,
     elevationAggregation: 'MEAN',
     colorRange: MOVEMENT_COLORS,
-    colorDomain: [0.4, 5],
+    colorDomain: MOVEMENT_DOMAIN,
     elevationDomain: [0, 8],
     elevationRange: [2, 40],
-    opacity: 0.42,
+    opacity: 0.5,
     material: { ambient: 0.6, diffuse: 0.5, shininess: 8 },
     pickable: false,
     transitions: { elevationScale: { duration: 1800 } },

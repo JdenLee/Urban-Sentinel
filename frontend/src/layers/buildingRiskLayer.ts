@@ -1,7 +1,7 @@
 import { GeoJsonLayer, ColumnLayer } from '@deck.gl/layers';
 import type { Layer } from '@deck.gl/core';
-import type { JoinedFeature } from '../types/predictions';
-import { PRIORITY_COLOR, SELECTED_COLOR, UNSCORED_COLOR } from '../data/priority';
+import type { JoinedFeature, Priority } from '../types/predictions';
+import { FILTERED_COLOR, PRIORITY_COLOR, SELECTED_COLOR, UNSCORED_COLOR } from '../data/priority';
 import { featureCentroid } from '../data/joinByBin';
 
 type RGBA = [number, number, number, number];
@@ -17,14 +17,22 @@ export interface BuildingLayerOptions {
   scored: JoinedFeature[];
   showRisk: boolean;
   selectedBin: string | null;
+  /** Categories shown in colour; others render as filtered gray. */
+  visiblePriorities: Set<Priority>;
+  /** When set, only buildings ranked within this capacity keep their colour. */
+  capacityCutoff: number | null;
   /** 0..1 pulse phase for the selection beacon. */
   pulse: number;
 }
 
-function riskColor(f: JoinedFeature, showRisk: boolean, selectedBin: string | null): RGBA {
+const FILTERED: RGBA = [...FILTERED_COLOR, 255];
+
+function riskColor(f: JoinedFeature, o: BuildingLayerOptions): RGBA {
   const p = f.properties.prediction;
-  if (f.properties.bin === selectedBin) return [...SELECTED_COLOR, 255];
-  if (!p || !showRisk) return SCORED_NEUTRAL;
+  if (f.properties.bin === o.selectedBin) return [...SELECTED_COLOR, 255];
+  if (!p || !o.showRisk) return SCORED_NEUTRAL;
+  if (!o.visiblePriorities.has(p.priority)) return FILTERED;
+  if (o.capacityCutoff !== null && p.rank > o.capacityCutoff) return FILTERED;
   return [...PRIORITY_COLOR[p.priority], 255];
 }
 
@@ -34,7 +42,9 @@ function riskColor(f: JoinedFeature, showRisk: boolean, selectedBin: string | nu
  *  - scored: buildings with predictions, coloured by priority with a gray → colour transition
  *  - selection: wireframe shell plus a light beam above the selected building
  */
-export function buildingRiskLayers({ context, scored, showRisk, selectedBin, pulse }: BuildingLayerOptions): Layer[] {
+export function buildingRiskLayers(options: BuildingLayerOptions): Layer[] {
+  const { context, scored, showRisk, selectedBin, visiblePriorities, capacityCutoff, pulse } = options;
+  const filterKey = [...visiblePriorities].sort().join(',');
   const layers: Layer[] = [
     new GeoJsonLayer<JoinedFeature['properties']>({
       id: 'context-buildings',
@@ -54,12 +64,12 @@ export function buildingRiskLayers({ context, scored, showRisk, selectedBin, pul
       filled: true,
       stroked: false,
       getElevation: (f) => f.properties.height_m,
-      getFillColor: (f) => riskColor(f as JoinedFeature, showRisk, selectedBin),
+      getFillColor: (f) => riskColor(f as JoinedFeature, options),
       material: MATERIAL,
       pickable: true,
       autoHighlight: true,
       highlightColor: [255, 255, 255, 70],
-      updateTriggers: { getFillColor: [showRisk, selectedBin] },
+      updateTriggers: { getFillColor: [showRisk, selectedBin, filterKey, capacityCutoff] },
       transitions: { getFillColor: { duration: COLOR_TRANSITION_MS, type: 'interpolation' } },
     }),
   ];

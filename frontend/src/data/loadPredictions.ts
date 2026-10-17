@@ -1,10 +1,15 @@
 import type {
   BuildingPrediction,
+  Contribution,
   DataMode,
   Factors,
+  ModelCard,
   ModelInfo,
+  MovementMeta,
   MovementPoint,
   PredictionSet,
+  RecordEvent,
+  SourceRef,
 } from '../types/predictions';
 import { normalisePriority, priorityFromScore } from './priority';
 
@@ -17,6 +22,13 @@ const num = (v: unknown): number | null => {
   const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v;
   return typeof n === 'number' && Number.isFinite(n) ? n : null;
 };
+const unit = (v: unknown): number | null => {
+  const n = num(v);
+  return n !== null && n >= 0 && n <= 1 ? n : null;
+};
+const strList = (v: unknown): string[] => (Array.isArray(v) ? v.map(str).filter((s): s is string => !!s) : []);
+const display = (v: unknown): string | null =>
+  v === null || v === undefined ? null : typeof v === 'number' ? String(v) : str(v);
 
 /** BINs may arrive as numbers or "1000010.0"; the join key is always the integer string. */
 export function binString(value: unknown): string | null {
@@ -30,7 +42,7 @@ function parseMovement(raw: unknown): MovementPoint[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter(isObj)
-    .map((p) => ({ date: str(p.date), displacement_mm: num(p.displacement_mm) }))
+    .map((p) => ({ date: str(p.date), displacement_mm: num(p.displacement_mm), baseline_mm: num(p.baseline_mm) }))
     .filter((p): p is MovementPoint => p.date !== null && p.displacement_mm !== null && !Number.isNaN(Date.parse(p.date)))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -44,29 +56,75 @@ function parseFactors(raw: unknown): Factors {
   return out;
 }
 
+function parseContributions(raw: unknown): Contribution[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter(isObj)
+    .map((c) => ({
+      label: str(c.label) ?? str(c.feature) ?? '',
+      value: display(c.value),
+      contribution: num(c.contribution) ?? num(c.shap) ?? num(c.log_odds) ?? Number.NaN,
+    }))
+    .filter((c) => c.label && Number.isFinite(c.contribution))
+    .sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution));
+}
+
+function parseRecords(raw: unknown): RecordEvent[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter(isObj)
+    .map((r) => ({ date: str(r.date), type: str(r.type) ?? 'Record', description: str(r.description) ?? '' }))
+    .filter((r) => r.description || r.date)
+    .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+}
+
+function parseSources(raw: unknown): SourceRef[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter(isObj)
+    .map((s) => ({ name: str(s.name) ?? '', observed_at: str(s.observed_at) }))
+    .filter((s) => s.name);
+}
+
+function parseInterval(raw: unknown): [number, number] | null {
+  if (!Array.isArray(raw) || raw.length !== 2) return null;
+  const lo = unit(raw[0]), hi = unit(raw[1]);
+  return lo !== null && hi !== null && lo <= hi ? [lo, hi] : null;
+}
+
 interface Candidate extends Omit<BuildingPrediction, 'rank'> {
   rank: number | null;
 }
 
-/** Frontend contract record (schema_version 1.0). */
+/** Frontend contract record (schema_version 1.x). */
 function parseContractRecord(r: Json): Candidate | string {
   const score = num(r.score);
   if (score === null) return 'missing or non-numeric score';
   if (score < 0 || score > 1) return `score ${score} outside [0, 1]`;
   const rank = num(r.rank);
-  const confidence = num(r.confidence);
   return {
     bin: '',
     score,
     rank: rank !== null && rank >= 1 ? Math.round(rank) : null,
     priority: normalisePriority(r.priority) ?? priorityFromScore(score),
-    confidence: confidence !== null && confidence >= 0 && confidence <= 1 ? confidence : null,
+    confidence: unit(r.confidence),
     address: str(r.address),
-    explanations: Array.isArray(r.explanations) ? r.explanations.map(str).filter((s): s is string => !!s) : [],
+    explanations: strList(r.explanations),
     factors: parseFactors(r.factors),
     movement_history: parseMovement(r.movement_history),
+    probability: unit(r.probability),
+    score_interval: parseInterval(r.score_interval),
+    contributions: parseContributions(r.contributions),
+    angular_distortion: num(r.angular_distortion),
+    record_history: parseRecords(r.record_history),
+    consequence: parseFactors(r.consequence),
+    completeness: unit(r.completeness),
+    missing_inputs: strList(r.missing_inputs),
+    sources: parseSources(r.sources),
   };
 }
+
+const ML_STATUS_TYPE = 'FISP filing';
 
 /** ML service record (ml/contract/building_score.schema.json): score lives in `prediction`. */
 function parseMlServiceRecord(r: Json): Candidate | string {
@@ -81,6 +139,8 @@ function parseMlServiceRecord(r: Json): Candidate | string {
     const label = str(d.label) ?? str(d.feature);
     if (label) factors[label] = (d.value as string | number | null) ?? null;
   }
+  const fisp = isObj(r.fisp) ? r.fisp : {};
+  const history = Array.isArray(fisp.history) ? fisp.history.filter(isObj) : [];
   const rank = num(p.rank);
   return {
     bin: '',
@@ -93,12 +153,27 @@ function parseMlServiceRecord(r: Json): Candidate | string {
       .filter((d) => d.effect !== 'lowers')
       .map((d) => {
         const label = str(d.label) ?? str(d.feature);
-        const value = str(String(d.value ?? ''));
+        const value = display(d.value);
         return label ? (value ? `${label}: ${value}` : label) : null;
       })
       .filter((s): s is string => !!s),
     factors,
     movement_history: parseMovement(r.movement_history),
+    probability: score,
+    score_interval: null,
+    contributions: parseContributions(drivers),
+    angular_distortion: null,
+    record_history: history
+      .map((h) => ({
+        date: str(h.filed_on),
+        type: ML_STATUS_TYPE,
+        description: `Cycle ${num(h.cycle) ?? '?'}: ${str(h.status) ?? 'unknown'}`,
+      }))
+      .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')),
+    consequence: {},
+    completeness: null,
+    missing_inputs: strList(r.missing),
+    sources: [],
   };
 }
 
@@ -111,10 +186,44 @@ function parseModel(raw: Json): ModelInfo {
     ? str(firstPrediction.prediction.scored_on.machine)
     : null;
   const platform = str(model.execution_platform) ?? (machine === 's390x' ? 'IBM LinuxONE' : machine) ?? 'unknown';
+  const trainCycles = Array.isArray(model.train_cycles) ? model.train_cycles.map(num).filter((n) => n !== null) : [];
   return {
     name: str(model.name) ?? 'facade-inspection-priority',
     version: str(model.version) ?? str(model.model_sha256) ?? 'unknown',
     execution_platform: platform,
+    trained_through:
+      str(model.trained_through) ?? (trainCycles.length ? `FISP cycle ${Math.max(...(trainCycles as number[]))}` : null),
+  };
+}
+
+function parseModelCard(raw: Json): ModelCard {
+  const card = isObj(raw.model_card) ? raw.model_card : {};
+  const metrics = Array.isArray(card.metrics)
+    ? card.metrics
+        .filter(isObj)
+        .map((m) => ({ label: str(m.label) ?? '', value: display(m.value) }))
+        .filter((m) => m.label)
+    : [];
+  const meta = isObj(raw.meta) ? raw.meta : {};
+  return {
+    target: str(card.target) ?? str(meta.label),
+    score_definition: str(card.score_definition),
+    confidence_definition: str(card.confidence_definition),
+    metrics,
+    limitations: strList(card.limitations).length ? strList(card.limitations) : strList(meta.caveats),
+  };
+}
+
+function parseMovementMeta(raw: Json): MovementMeta {
+  const m = isObj(raw.movement) ? raw.movement : {};
+  return {
+    measurement: str(m.measurement) ?? 'Line-of-sight (LOS) velocity',
+    units: str(m.units) ?? 'mm/yr',
+    source: str(m.source),
+    posting_m: num(m.posting_m),
+    aggregation_m: num(m.aggregation_m) ?? 60,
+    period_start: str(m.period_start),
+    period_end: str(m.period_end),
   };
 }
 
@@ -163,12 +272,16 @@ export function parsePredictions(raw: unknown): PredictionSet {
     allRanked ? (a.rank as number) - (b.rank as number) : b.score - a.score || a.bin.localeCompare(b.bin),
   );
   const buildings: BuildingPrediction[] = ordered.map((c, i) => ({ ...c, rank: allRanked ? (c.rank as number) : i + 1 }));
+  const meta = isObj(raw.meta) ? raw.meta : {};
 
   return {
     schema_version: str(raw.schema_version) ?? 'ml-service',
-    generated_at: str(raw.generated_at) ?? (isObj(raw.meta) ? str(raw.meta.generated_at) : null),
+    generated_at: str(raw.generated_at) ?? str(meta.generated_at),
+    data_as_of: str(raw.data_as_of) ?? str(meta.as_of),
     data_mode,
     model: parseModel(raw),
+    model_card: parseModelCard(raw),
+    movement: parseMovementMeta(raw),
     buildings,
     rejected,
   };

@@ -48,7 +48,17 @@ export const PRIORITY_COLOR: Record<Priority, RGB> = {
   critical: [255, 46, 64],
 };
 export const UNSCORED_COLOR: RGB = [52, 60, 78];
+/** Scored buildings hidden by a filter or capacity cutoff. */
+export const FILTERED_COLOR: RGB = [70, 78, 96];
 export const SELECTED_COLOR: RGB = [180, 255, 255];
+
+/** Legend ranges with half-open bounds so no score falls in two categories. */
+export const PRIORITY_RANGE: Record<Priority, string> = {
+  critical: `≥ ${PRIORITY_THRESHOLDS.critical.toFixed(2)}`,
+  high: `${PRIORITY_THRESHOLDS.high.toFixed(2)}–<${PRIORITY_THRESHOLDS.critical.toFixed(2)}`,
+  medium: `${PRIORITY_THRESHOLDS.medium.toFixed(2)}–<${PRIORITY_THRESHOLDS.high.toFixed(2)}`,
+  low: `< ${PRIORITY_THRESHOLDS.medium.toFixed(2)}`,
+};
 
 export function rgbCss([r, g, b]: RGB, alpha = 1): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;

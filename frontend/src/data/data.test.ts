@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_HEIGHT_M, joinByBin } from './joinByBin';
 import { parseBuildings } from './loadBuildings';
 import { binString, parsePredictions } from './loadPredictions';
-import { normalisePriority, priorityFromScore } from './priority';
+import { normalisePriority, priorityFromScore, PRIORITY_RANGE } from './priority';
+import { searchScored, shortlistCsv } from './shortlist';
 import { movementPoints } from '../layers/movementHexagonLayer';
 import { demoTimeline, DEMO_DURATION_MS } from '../components/DemoController';
 
@@ -182,9 +183,59 @@ describe('parsePredictions', () => {
     expect(() => parsePredictions(null)).toThrow();
   });
 
+  it('parses optional decision-support fields and hides invalid ones', () => {
+    const p = contract([
+      {
+        bin: '1000001',
+        score: 0.9,
+        probability: 0.6,
+        score_interval: [0.8, 0.95],
+        contributions: [
+          { label: 'Small', value: 1, contribution: 0.1 },
+          { label: 'Big negative', contribution: -0.7 },
+          { label: 'Bad', contribution: 'x' },
+        ],
+        record_history: [
+          { date: '2020-01-01', type: 'FISP filing', description: 'old' },
+          { date: '2026-01-01', type: 'DOB violation', description: 'new' },
+        ],
+        completeness: 0.8,
+        missing_inputs: ['Façade material'],
+        sources: [{ name: 'DOB', observed_at: '2026-09-30' }],
+        movement_history: [{ date: '2026-01-01', displacement_mm: -1, baseline_mm: 0.4 }],
+      },
+      { bin: '1000002', score: 0.5, probability: 3, score_interval: [0.9, 0.1], completeness: -1 },
+    ]);
+    const [a, b] = p.buildings;
+    expect(a.probability).toBe(0.6);
+    expect(a.score_interval).toEqual([0.8, 0.95]);
+    expect(a.contributions.map((c) => c.label)).toEqual(['Big negative', 'Small']);
+    expect(a.contributions[1].value).toBe('1');
+    expect(a.record_history[0].description).toBe('new');
+    expect(a.movement_history[0].baseline_mm).toBe(0.4);
+    expect(b.probability).toBeNull();
+    expect(b.score_interval).toBeNull();
+    expect(b.completeness).toBeNull();
+    expect(b.contributions).toEqual([]);
+  });
+
+  it('fills model card, movement metadata and dates with safe defaults', () => {
+    const p = contract([]);
+    expect(p.model_card.metrics).toEqual([]);
+    expect(p.model.trained_through).toBeNull();
+    expect(p.data_as_of).toBeNull();
+    expect(p.movement.aggregation_m).toBe(60);
+    expect(p.movement.measurement).toMatch(/line-of-sight/i);
+  });
+
   it('accepts the ML service contract (ml/contract/building_score.schema.json)', () => {
     const p = parsePredictions({
-      meta: { generated_at: '2026-10-17T17:07:03Z', model: { model_sha256: 'abc123' } },
+      meta: {
+        generated_at: '2026-10-17T17:07:03Z',
+        as_of: '2026-10-17',
+        model: { model_sha256: 'abc123', train_cycles: [7, 8, 9] },
+        caveats: ['Not collapse risk.'],
+      },
       buildings: [
         {
           bin: '3332220',
@@ -194,6 +245,13 @@ describe('parsePredictions', () => {
             { feature: 'status_at_cutoff', label: 'Status on record now', value: 'UNSAFE', effect: 'raises', log_odds: 1.07 },
             { feature: 'age', label: 'Building age', value: '96', effect: 'lowers', log_odds: -0.2 },
           ],
+          fisp: {
+            history: [
+              { cycle: 8, status: 'SAFE', filed_on: '2019-01-01' },
+              { cycle: 9, status: 'UNSAFE', filed_on: '2024-10-10' },
+            ],
+          },
+          missing: ['lot_area'],
         },
         { bin: '1000001', address: null, prediction: null, drivers: [] },
       ],
@@ -203,7 +261,50 @@ describe('parsePredictions', () => {
     expect(p.buildings).toHaveLength(1);
     expect(p.buildings[0]).toMatchObject({ bin: '3332220', score: 0.9346, rank: 1, priority: 'critical' });
     expect(p.buildings[0].explanations).toEqual(['Status on record now: UNSAFE']);
+    expect(p.buildings[0].probability).toBe(0.9346);
+    expect(p.buildings[0].contributions.map((c) => c.contribution)).toEqual([1.07, -0.2]);
+    expect(p.buildings[0].record_history[0].description).toBe('Cycle 9: UNSAFE');
+    expect(p.buildings[0].missing_inputs).toEqual(['lot_area']);
+    expect(p.model.trained_through).toBe('FISP cycle 9');
+    expect(p.data_as_of).toBe('2026-10-17');
+    expect(p.model_card.limitations).toEqual(['Not collapse risk.']);
     expect(p.rejected[0].bin).toBe('1000001');
+  });
+});
+
+describe('legend ranges', () => {
+  it('uses half-open bounds so boundary scores belong to one category', () => {
+    expect(PRIORITY_RANGE.high).toBe('0.70–<0.85');
+    expect(PRIORITY_RANGE.medium).toBe('0.45–<0.70');
+    expect(PRIORITY_RANGE.critical).toBe('≥ 0.85');
+  });
+});
+
+describe('shortlist tools', () => {
+  const b = footprints([
+    { bin: '1000001', address: '1 Wall Street' },
+    { bin: '1000002', address: '20 Broad Street, "Annex"' },
+  ]);
+  const j = joinByBin(
+    b,
+    contract([
+      { bin: '1000001', score: 0.9, explanations: ['Recent complaint'] },
+      { bin: '1000002', score: 0.5 },
+    ]),
+  );
+
+  it('searches by address substring or BIN prefix', () => {
+    expect(searchScored(j.scored, 'wall').map((f) => f.properties.bin)).toEqual(['1000001']);
+    expect(searchScored(j.scored, '100000')).toHaveLength(2);
+    expect(searchScored(j.scored, '  ')).toEqual([]);
+  });
+
+  it('exports CSV in rank order with BIN kept as text and quotes escaped', () => {
+    const csv = shortlistCsv(j.scored, (bin) => (bin === '1000001' ? 'assigned' : 'unassigned'));
+    const lines = csv.trim().split('\n');
+    expect(lines[0]).toBe('rank,bin,address,priority,score,probability,top_signal,status');
+    expect(lines[1]).toBe('1,"=""1000001""",1 Wall Street,Critical,0.900,,Recent complaint,Assigned');
+    expect(lines[2]).toContain('"20 Broad Street, ""Annex"""');
   });
 });
 

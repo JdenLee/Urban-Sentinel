@@ -34,10 +34,10 @@ export function LayerControls(props: LayerControlsProps) {
   const { showRisk, showMovement, movementAvailable, demoRunning, onToggleRisk, onToggleMovement, onPlayDemo, onReset } = props;
   return (
     <div className="controls">
-      <Toggle label="Inspection priority" hint="Colour buildings by model score" checked={showRisk} onChange={onToggleRisk} />
+      <Toggle label="Inspection priority" hint="Colour scored buildings by category" checked={showRisk} onChange={onToggleRisk} />
       <Toggle
         label="Satellite movement"
-        hint={movementAvailable ? 'SAR displacement, 60 m hexagons' : 'Not in current prediction file'}
+        hint={movementAvailable ? 'InSAR line-of-sight velocity (own legend)' : 'Not in current prediction file'}
         checked={showMovement}
         disabled={!movementAvailable}
         onChange={onToggleMovement}
