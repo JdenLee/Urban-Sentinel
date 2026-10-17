@@ -67,6 +67,37 @@ def load_dob_facade_risk(refresh: bool = False) -> pd.Series:
     return frame.groupby("bin")["PredProb"].max().astype(float)
 
 
+PLUTO_COLUMNS = ["bbl", "address", "latitude", "longitude", "yearbuilt", "numfloors", "bldgclass", "lotarea",
+                 "histdist", "landmark"]
+
+
+def facade_bbls(fac: pd.DataFrame) -> pd.Series:
+    """10-digit BBL per BIN built from the façade filing's borough/block/lot (billing BBL for condos)."""
+    rows = fac.dropna(subset=["borough_code", "block", "lot"]).sort_values("observed_on").groupby("bin").tail(1)
+    block = pd.to_numeric(rows["block"], errors="coerce")
+    lot = pd.to_numeric(rows["lot"], errors="coerce")
+    bbl = rows["borough_code"] * 10**9 + block * 10**4 + lot
+    return pd.Series(bbl.to_numpy(), index=rows["bin"]).dropna().astype("int64").astype(str)
+
+
+def load_pluto(bbls: pd.Series, refresh: bool = False, chunk: int = 300) -> pd.DataFrame:
+    """PLUTO attributes and lot centroid for the given BBLs (current snapshot; location fields are stable)."""
+    path = RAW_DIR / "pluto_fisp.csv.gz"
+    if path.exists() and not refresh:
+        return pd.read_csv(path, dtype=str).set_index("bbl")
+    unique = sorted(set(bbls))
+    rows: list[dict] = []
+    for i in range(0, len(unique), chunk):
+        where = "bbl in(" + ",".join(unique[i:i + chunk]) + ")"
+        rows.extend(socrata.query(DATASETS["pluto"], select=",".join(PLUTO_COLUMNS), where=where))
+    frame = pd.DataFrame(rows, dtype=str)
+    frame["bbl"] = pd.to_numeric(frame["bbl"], errors="coerce").astype("Int64").astype(str)
+    frame = frame.drop_duplicates("bbl")
+    RAW_DIR.mkdir(parents=True, exist_ok=True)
+    frame.to_csv(path, index=False, compression="gzip")
+    return frame.set_index("bbl")
+
+
 if __name__ == "__main__":
     fac = load_facades()
     print(fac.shape, fac["observed_on"].isna().sum(), "rows without an observable date")

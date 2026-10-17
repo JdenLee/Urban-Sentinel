@@ -13,7 +13,6 @@ import xgboost as xgb
 import pandas as pd
 
 from . import evidence
-from .artifacts import save_deployment_model
 from .config import CYCLE_START, DOB_FACADE_RISK_SNAPSHOT, REPORTS_DIR
 from .evaluation import calibration_metrics, paired_bootstrap, ranking_metrics, reliability_table
 from .features import FACADE_FEATURES, build_features
@@ -174,8 +173,6 @@ def run() -> dict:
     current["subcycle_A_excluding_prior_nrf"] = compare(y10_all[representative],
                                                        {k: v[representative] for k, v in s10.items()})
     report["current_cycle10_to_date"] = current
-    save_deployment_model(ft, ct, train_cycles=[7, 8, 9], calibration_cycle=9, xgb_rounds=rt,
-                          test_summary={"cycle9_primary": primary["metrics"]["xgboost"]})
     report["run"]["seconds"] = round(time.time() - t0, 1)
     return report
 

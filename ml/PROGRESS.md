@@ -1,5 +1,39 @@
 # ML workstream — running progress note
 
+## 2026-10-17 13:05 EDT — integration layer ready (scores + API + contract + LinuxONE runbook)
+
+**Works.**
+- `python -m urban_sentinel.pipeline` runs evaluate → train at today's vantage → score in one command.
+- `uvicorn urban_sentinel.serve:app` serves the results.
+- 8 tests pass, including a **cross-architecture parity test**: 20 frozen predictions must reproduce within 1e-6 on
+  big-endian s390x.
+
+**Deployed model is vantage-matched.** Live scores are made 1.65 years into cycle 10 for buildings that haven't filed
+yet. So the model is trained on the same situation in cycles 7–9: cutoff = cycle start + the same elapsed time,
+restricted to buildings still pending then.
+- Same-vantage backtest on cycle 9 (n=11,643 pending, base 0.247): **XGBoost PR-AUC 0.421 vs rule 0.363.**
+
+**Outputs.**
+- 16,512 FISP buildings.
+- 13,659 pending buildings scored, with tiers by rank percentile: high 682, elevated 2,049.
+- 2,853 have already filed cycle 10 and carry their recorded status instead of a prediction.
+- 356 lack a PLUTO location.
+
+**API endpoints:**
+- `/health`: platform fingerprint, so it shows `s390x`/`big` on LinuxONE.
+- `/buildings/{bin}`.
+- `/top?mode=unknown_risk`: excludes buildings already on record as UNSAFE.
+- `/buildings.geojson`.
+- `POST /score/{bin}`: live on-server inference, about 35 ms.
+- `POST /rescore`: token-protected; refreshes Open Data and retrains.
+
+**Contract for the frontend.** `contract/building_score.schema.json` plus `contract/sample_buildings.json` (20
+records), keyed by BIN with PLUTO lat/lon.
+
+**Needs from team:**
+- Aaron: run `deploy/linuxone/RUNBOOK.md` steps 0–6 on the VM and paste the outputs back.
+- Frontend owner: confirm the contract.
+
 ## 2026-10-17 12:45 EDT — Step 1 (façade history only, strict point-in-time)
 
 **Works.** The pipeline runs end to end locally: cached Socrata ingest → labels → point-in-time features → baselines and
