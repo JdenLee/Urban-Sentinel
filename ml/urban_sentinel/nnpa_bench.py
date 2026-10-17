@@ -19,9 +19,11 @@ import os
 import platform
 import time
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import xgboost as xgb
 
 from . import evidence
 from .artifacts import MODEL_FILE, DeployedModel
@@ -43,6 +45,31 @@ def find_zdnn() -> list[str]:
     for pattern in ZDNN_GLOBS:
         found.extend(sorted(glob.glob(pattern, recursive=True)))
     return list(dict.fromkeys(found))
+
+
+def legacy_xgb_json(src, dst, keep_feature_names: bool = False) -> None:
+    """Rewrite an XGBoost 3.x JSON model in the 1.x layout Snap ML's importer expects.
+
+    Snap ML (1.17.2) parses the file textually: XGBoost 3.x brackets base_score ("[2.4E-1]"), adds a
+    gbtree "cats" block and drops learner "name":"generic", after which it reports "no objective defined".
+    The trees themselves are unchanged, and XGBoost loads the rewritten file with identical predictions
+    (checked in run()).
+    """
+    m = json.loads(Path(src).read_text())
+    learner = m["learner"]
+    lmp = dict(learner["learner_model_param"])
+    lmp["base_score"] = lmp["base_score"].strip("[]")
+    model = {k: v for k, v in learner["gradient_booster"]["model"].items() if k != "cats"}
+    legacy = {"learner": {
+        "attributes": learner.get("attributes", {}),
+        "feature_names": learner["feature_names"] if keep_feature_names else [],
+        "feature_types": learner["feature_types"] if keep_feature_names else [],
+        "gradient_booster": {"model": model, "name": learner["gradient_booster"]["name"]},
+        "learner_model_param": lmp,
+        "name": "generic",
+        "objective": learner["objective"],
+    }, "version": [1, 7, 6]}
+    Path(dst).write_text(json.dumps(legacy, separators=(",", ":")))
 
 
 def zdnn_status(path: str) -> dict:
@@ -115,13 +142,38 @@ def run() -> dict:
         report["verdict"] = "NOT RUN: snapml missing (pip install --no-deps --target <pydeps> snapml)"
         return report
 
+    # Candidate model files: the native XGBoost 3.4 export and legacy-layout rewrites (verified with XGBoost).
+    candidates = {"native_xgb3": MODEL_FILE}
+    for name, keep in [("legacy_xgb1", False), ("legacy_xgb1_named", True)]:
+        path = MODEL_FILE.with_name(f"facade_unsafe_xgb_{name}.json")
+        legacy_xgb_json(MODEL_FILE, path, keep_feature_names=keep)
+        check = xgb.Booster()
+        check.load_model(str(path))
+        if float(np.abs(check.inplace_predict(Xnp) - ref).max()) < 1e-6:
+            candidates[name] = path
+    report["model_file_candidates"] = list(candidates)
+    chosen, attempts = None, {}
+    for name, path in candidates.items():
+        try:
+            snapml.BoostingMachineClassifier().import_model(str(path), "xgb_json", tree_format="compress_trees")
+            chosen = path
+            attempts[name] = "imported"
+            break
+        except Exception as exc:
+            attempts[name] = f"{type(exc).__name__}: {exc}"
+    report["snapml"]["import_attempts"] = attempts
+    if chosen is None:
+        report["verdict"] = "NOT ON NNPA (Snap ML could not import any model file variant); XGBoost remains the serving path"
+        return report
+    report["snapml"]["model_file"] = chosen.name
+
     report["snapml"]["formats"] = {}
     order_ref = np.argsort(-ref, kind="stable")
     for fmt in ("compress_trees", "zdnn_tensors", "auto"):
         entry: dict = {}
         try:
             sm = snapml.BoostingMachineClassifier()
-            sm.import_model(str(MODEL_FILE), "xgb_json", tree_format=fmt, X=Xnp)
+            sm.import_model(str(chosen), "xgb_json", tree_format=fmt, X=Xnp)
             entry["optimized_tree_format_"] = getattr(sm.booster_, "optimized_tree_format_", None)
             pred, ms = timed(lambda: sm.predict_proba(Xnp)[:, 1], 5)
             _, ms1 = timed(lambda: sm.predict_proba(Xnp[:1])[:, 1], 200)
