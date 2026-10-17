@@ -6,7 +6,6 @@ import pandas as pd
 import xgboost as xgb
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
-from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -53,5 +52,30 @@ def fit_xgb(X_train, y_train, X_valid=None, y_valid=None, n_estimators: int | No
     return xgb.XGBClassifier(**params).fit(X_train, y_train, verbose=False)
 
 
-def fit_isotonic(raw_prob: np.ndarray, y: np.ndarray) -> IsotonicRegression:
-    return IsotonicRegression(out_of_bounds="clip", y_min=0.0, y_max=1.0).fit(raw_prob, y)
+class PlattCalibrator:
+    """Platt scaling on the logit of the raw score: smooth and strictly monotone, so it never produces the
+    0/1 plateaus (and top-k ties) that isotonic regression does on small calibration sets. Two parameters,
+    stored as JSON."""
+
+    def __init__(self, a: float = 1.0, b: float = 0.0):
+        self.a, self.b = float(a), float(b)
+
+    @staticmethod
+    def _logit(p):
+        p = np.clip(np.asarray(p, dtype=float), 1e-6, 1 - 1e-6)
+        return np.log(p / (1 - p))
+
+    @classmethod
+    def fit(cls, raw_prob, y) -> "PlattCalibrator":
+        lr = LogisticRegression(C=1e6, max_iter=1000).fit(cls._logit(raw_prob).reshape(-1, 1), np.asarray(y))
+        return cls(lr.coef_[0, 0], lr.intercept_[0])
+
+    def predict(self, raw_prob) -> np.ndarray:
+        return 1.0 / (1.0 + np.exp(-(self.a * self._logit(raw_prob) + self.b)))
+
+    def to_json(self) -> dict:
+        return {"type": "platt", "a": self.a, "b": self.b}
+
+    @classmethod
+    def from_json(cls, d: dict) -> "PlattCalibrator":
+        return cls(d["a"], d["b"])

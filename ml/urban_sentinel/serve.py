@@ -18,8 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import evidence, score
 from .artifacts import DeployedModel
 from .config import OUTPUT_DIR, REPORTS_DIR, cycle_at
-from .features import FACADE_FEATURES, build_features
-from .ingest import load_facades
+from .featureset import Context, feature_matrix
 
 SCORES_FILE = OUTPUT_DIR / "buildings_scores.json"
 DEFAULT_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000"
@@ -36,12 +35,12 @@ class State:
             raise RuntimeError(f"{SCORES_FILE} missing: run `python -m urban_sentinel.score` first")
         payload = json.loads(SCORES_FILE.read_text())
         model = DeployedModel.load()
-        fac = load_facades()
+        ctx = Context.load()
         with self.lock:
             self.meta = payload["meta"]
             self.buildings = {r["bin"]: r for r in payload["buildings"]}
             self.model = model
-            self.fac = fac
+            self.ctx = ctx
 
 
 state = State()
@@ -122,16 +121,16 @@ def live_score(bin_id: str):
         raise HTTPException(404, f"BIN {bin_id} is not in the FISP universe")
     now = pd.Timestamp.now().normalize()
     t0 = time.perf_counter()
-    records = state.fac[state.fac["bin"] == bin_id]  # every feature is per-building
-    records = records[(records["observed_on"] <= now) | records["observed_on"].isna()]
-    X = build_features(records, pd.Index([bin_id]), now, cycle_at(now))
+    features = state.model.meta["features"]
+    sub = state.ctx.restricted_to([bin_id])  # every feature is per-building
+    X = feature_matrix(sub, pd.Index([bin_id]), now, cycle_at(now))[features]
     raw, prob, contrib = state.model.predict(X)
     elapsed_ms = (time.perf_counter() - t0) * 1000
     fp = evidence.fingerprint()
     return {"bin": bin_id, "probability": round(float(prob[0]), 4), "raw_score": round(float(raw[0]), 4),
             "already_filed_this_cycle": rec["fisp"]["current_cycle_filed"],
-            "features": dict(zip(FACADE_FEATURES, X.iloc[0].tolist())),
-            "contributions": dict(zip(FACADE_FEATURES, [round(float(c), 4) for c in contrib[0]])),
+            "features": {k: (None if pd.isna(v) else v) for k, v in zip(features, X.iloc[0].tolist())},
+            "contributions": dict(zip(features, [round(float(c), 4) for c in contrib[0]])),
             "inference_ms": round(elapsed_ms, 2), "machine": fp["machine"], "byteorder": fp["byteorder"],
             "model": state.model.meta["model_sha256"]}
 

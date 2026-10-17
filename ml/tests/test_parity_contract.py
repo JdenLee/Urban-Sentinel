@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 
+from urban_sentinel.models import PlattCalibrator
+
 FIXTURES = Path(__file__).parent / "fixtures"
 CONTRACT = Path(__file__).parents[1] / "contract"
 
@@ -18,8 +20,7 @@ def test_model_predictions_match_reference_architecture():
     X = pd.DataFrame(cases["X"], columns=cases["features"], dtype=float)
     dm = xgb.DMatrix(X)
     raw = booster.predict(dm)
-    cal = json.loads((FIXTURES / "parity_calibration.json").read_text())
-    prob = np.interp(raw, cal["x"], cal["y"])
+    prob = PlattCalibrator.from_json(json.loads((FIXTURES / "parity_calibration.json").read_text())).predict(raw)
     contrib_sum = booster.predict(dm, pred_contribs=True)[:, :-1].sum(1)
     print(f"parity on {sys.byteorder}-endian vs fixture from {cases['generated_on']}")
     np.testing.assert_allclose(raw, cases["expected_raw"], rtol=0, atol=1e-6)

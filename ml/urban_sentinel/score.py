@@ -22,8 +22,9 @@ from .artifacts import DeployedModel, save_deployment_model
 from .config import CYCLE_START, ML_DIR, OUTPUT_DIR, cycle_at, subcycle_deadline
 from .evaluation import ranking_metrics
 from .experiments import fit_all
-from .features import FACADE_FEATURES, build_features
-from .ingest import facade_bbls, load_facades, load_pluto
+from .features import build_features
+from .featureset import Context, feature_matrix
+from .ingest import facade_bbls, load_pluto
 from .labels import build_labels
 from .models import rule_score
 
@@ -58,24 +59,48 @@ FEATURE_TEXT = {
 }
 
 
+SOURCE_TEXT = {"dob": "DOB violations", "ecb": "ECB violations", "cmp": "DOB complaints"}
+GROUP_TEXT = {"facade": "façade / Local Law 11", "fisp_compliance": "FISP filing compliance", "structural": "unsafe building",
+              "wall": "failure to maintain walls", "report": "façade report not filed", "unsafe_measures": "unsafe-façade enforcement",
+              "shed": "sidewalk shed"}
+BLDG_TEXT = {"bldg_age": ("Building age (years)", lambda v: f"{v:.0f}"), "num_floors": ("Floors", lambda v: f"{v:.0f}"),
+             "lot_area": ("Tax-lot size, sq ft (very large = multi-building development)", lambda v: f"{np.expm1(v):,.0f}"), "historic_district": ("In a historic district", _yes),
+             "landmark": ("Designated landmark", _yes)}
+
+
 def _describe(feature: str, value: float) -> tuple[str, str]:
+    src = feature.split("_", 1)[0]
+    if src in SOURCE_TEXT:
+        rest = feature[len(src) + 1:]
+        for suffix, text in [("_years_since", "years since last"), ("_ever", "all prior"), ("_5y", "past 5 years"),
+                             ("_1y", "past year")]:
+            if rest.endswith(suffix):
+                group = GROUP_TEXT.get(rest[: -len(suffix)], rest[: -len(suffix)].replace("_", " "))
+                if suffix == "_years_since":
+                    return f"{SOURCE_TEXT[src]} ({group}): {text}", ("none" if pd.isna(value) else f"{value:.1f}")
+                return f"{SOURCE_TEXT[src]} ({group}), {text}", f"{value:.0f}"
+    if feature in BLDG_TEXT:
+        label, fmt = BLDG_TEXT[feature]
+        return label, ("unknown" if pd.isna(value) else fmt(value))
+    if feature.startswith("class_"):
+        return f"Building class: {feature[6:].replace('_', ' ')}", _yes(value)
     if feature.startswith("wall_"):
         return f"Façade includes {feature[5:].replace('_', ' ')}", _yes(value)
     label, fmt = FEATURE_TEXT.get(feature, (feature, lambda v: f"{v:g}"))
     return label, ("unknown" if pd.isna(value) else fmt(value))
 
 
-def vantage_dataset(fac, target_cycle: int, elapsed: pd.Timedelta):
+def vantage_dataset(ctx: Context, target_cycle: int, elapsed: pd.Timedelta):
     cutoff = CYCLE_START[target_cycle] + elapsed
-    labels = build_labels(fac, target_cycle)
+    labels = build_labels(ctx.fac, target_cycle)
     labels = labels[labels["first_filed_on"] >= cutoff]  # still pending at the cutoff
-    return build_features(fac, labels.index, cutoff, target_cycle), labels
+    return feature_matrix(ctx, labels.index, cutoff, target_cycle), labels
 
 
-def train_vantage_model(fac, now: pd.Timestamp):
+def train_vantage_model(ctx: Context, now: pd.Timestamp):
     current = cycle_at(now)
     elapsed = now - CYCLE_START[current]
-    data = {t: vantage_dataset(fac, t, elapsed) for t in (current - 3, current - 2, current - 1)}
+    data = {t: vantage_dataset(ctx, t, elapsed) for t in (current - 3, current - 2, current - 1)}
     xy = {t: (X, lab["y"]) for t, (X, lab) in data.items()}
     t1, t2, t3 = sorted(xy)
     # Backtest at the same vantage: train on the two earlier cycles, test on the latest complete one.
@@ -105,14 +130,16 @@ def fisp_history(fac: pd.DataFrame) -> dict[str, list[dict]]:
             for b, g in per.groupby("bin")}
 
 
-def build_records(fac, model: DeployedModel, now: pd.Timestamp, pluto: pd.DataFrame | None) -> list[dict]:
+def build_records(ctx: Context, model: DeployedModel, now: pd.Timestamp, pluto: pd.DataFrame | None) -> list[dict]:
     current = cycle_at(now)
+    fac = ctx.fac
     seen = fac[(fac["observed_on"] <= now) | fac["observed_on"].isna()]
     universe = pd.Index(sorted(set(seen.loc[seen["cycle"] >= current - 1, "bin"])), name="bin")
     filed_now = build_labels(seen, current)
     pending = universe.difference(filed_now.index)
 
-    X = build_features(seen, pending, now, current)
+    features = model.meta["features"]
+    X = feature_matrix(ctx, pending, now, current)[features]
     raw, prob, contrib = model.predict(X)
     order = np.argsort(-raw, kind="stable")
     rank = np.empty(len(raw), int)
@@ -171,9 +198,9 @@ def build_records(fac, model: DeployedModel, now: pd.Timestamp, pluto: pd.DataFr
                 "scored_on": {"machine": fp["machine"], "byteorder": fp["byteorder"]},
             }
             top = np.argsort(-np.abs(contrib[i]))[:3]
-            rec["drivers"] = [{"feature": FACADE_FEATURES[j],
-                               "label": _describe(FACADE_FEATURES[j], X_at_now.iat[i, j])[0],
-                               "value": _describe(FACADE_FEATURES[j], X_at_now.iat[i, j])[1],
+            rec["drivers"] = [{"feature": features[j],
+                               "label": _describe(features[j], X_at_now.iat[i, j])[0],
+                               "value": _describe(features[j], X_at_now.iat[i, j])[1],
                                "effect": "raises" if contrib[i, j] > 0 else "lowers",
                                "log_odds": round(float(contrib[i, j]), 3)} for j in top]
             if not history.get(b):
@@ -185,13 +212,13 @@ def build_records(fac, model: DeployedModel, now: pd.Timestamp, pluto: pd.DataFr
 def run(refresh: bool = False, write_sample: bool = False, now: pd.Timestamp | None = None) -> dict:
     t0 = time.time()
     now = pd.Timestamp.now().normalize() if now is None else pd.Timestamp(now)
-    fac = load_facades(refresh=refresh)
-    meta, backtest = train_vantage_model(fac, now)
+    ctx = Context.load(refresh=refresh)
+    meta, backtest = train_vantage_model(ctx, now)
     t_train = time.time() - t0
     model = DeployedModel.load()
-    pluto = load_pluto(facade_bbls(fac), refresh=refresh)
+    pluto = load_pluto(facade_bbls(ctx.fac), refresh=refresh)
     t1 = time.time()
-    records = build_records(fac, model, now, pluto)
+    records = build_records(ctx, model, now, pluto)
     t_score = time.time() - t1
     pending = [r for r in records if r["prediction"]]
     out_meta = {

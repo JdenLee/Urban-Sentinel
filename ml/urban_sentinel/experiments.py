@@ -15,16 +15,20 @@ import pandas as pd
 from . import evidence
 from .config import CYCLE_START, DOB_FACADE_RISK_SNAPSHOT, REPORTS_DIR
 from .evaluation import calibration_metrics, paired_bootstrap, ranking_metrics, reliability_table
-from .features import FACADE_FEATURES, build_features
-from .ingest import load_dob_facade_risk, load_facades
+from .features import FACADE_FEATURES
+from .featureset import DEPLOYED_PARTS, Context, feature_matrix
+from .ingest import load_dob_facade_risk
 from .labels import build_labels, never_filers
-from .models import fit_isotonic, fit_logistic, fit_xgb, predict_logistic, rule_score
+from .models import PlattCalibrator, fit_logistic, fit_xgb, predict_logistic, rule_score
 
 
-def make_dataset(fac: pd.DataFrame, target_cycle: int, cutoff: pd.Timestamp | None = None):
+def make_dataset(ctx, target_cycle: int, cutoff: pd.Timestamp | None = None, parts=DEPLOYED_PARTS):
+    """Features + labels for one target cycle. Passing a bare façade DataFrame gives façade-only features."""
+    if isinstance(ctx, pd.DataFrame):
+        ctx, parts = Context(ctx), ()
     cutoff = CYCLE_START[target_cycle] if cutoff is None else pd.Timestamp(cutoff)
-    labels = build_labels(fac, target_cycle)
-    X = build_features(fac, labels.index, cutoff, target_cycle)
+    labels = build_labels(ctx.fac, target_cycle)
+    X = feature_matrix(ctx, labels.index, cutoff, target_cycle, parts)
     return X, labels
 
 
@@ -36,7 +40,7 @@ def fit_all(train_sets, valid_set):
     y_e = pd.concat([y for _, y in early])
     probe = fit_xgb(X_e, y_e, X_valid, y_valid)
     best_rounds = int(probe.best_iteration) + 1
-    calibrator = fit_isotonic(probe.predict_proba(X_valid)[:, 1], y_valid.to_numpy())
+    calibrator = PlattCalibrator.fit(probe.predict_proba(X_valid)[:, 1], y_valid.to_numpy())
     X_all = pd.concat([x for x, _ in train_sets])
     y_all = pd.concat([y for _, y in train_sets])
     final = fit_xgb(X_all, y_all, n_estimators=max(50, round(best_rounds * 1.15)))
@@ -67,18 +71,23 @@ def compare(y, scores: dict, ref="xgboost", against=("rule_prev_status", "logist
 
 def run() -> dict:
     t0 = time.time()
-    fac = load_facades()
+    ctx = Context.load()
+    fac = ctx.fac
     report: dict = {"run": evidence.fingerprint(), "label": "UNSAFE at first Initial FISP filing of the target cycle",
-                    "features": FACADE_FEATURES}
+                    "feature_set": ["facade", *DEPLOYED_PARTS]}
 
     # ---- Primary test: decision at the start of cycle 9, outcome = cycle-9 filing ----------------------
-    d7, d8, d9 = (make_dataset(fac, t) for t in (7, 8, 9))
+    d7, d8, d9 = (make_dataset(ctx, t) for t in (7, 8, 9))
     to_xy = lambda d: (d[0], d[1]["y"])
     final, calibrator, logit, rounds = fit_all([to_xy(d7), to_xy(d8)], to_xy(d8))
     X9, lab9 = d9
+    report["features"] = list(X9.columns)
     y9 = lab9["y"].to_numpy()
     s9 = score_methods(X9, final, calibrator, logit)
-    primary = compare(y9, s9)
+    facade_only = lambda d: (d[0][FACADE_FEATURES], d[1]["y"])
+    f_only, _, _, _ = fit_all([facade_only(d7), facade_only(d8)], facade_only(d8))
+    s9["xgboost_facade_only"] = f_only.predict_proba(X9[FACADE_FEATURES])[:, 1]
+    primary = compare(y9, s9, against=("rule_prev_status", "logistic_history", "xgboost_facade_only"))
     primary["train"] = {"cycles": [7, 8], "n": int(len(d7[1]) + len(d8[1])), "xgb_rounds_early_stop": rounds,
                         "cutoffs": [str(CYCLE_START[7].date()), str(CYCLE_START[8].date())]}
     primary["test"] = {"cycle": 9, "cutoff": str(CYCLE_START[9].date())}
@@ -108,7 +117,7 @@ def run() -> dict:
                              for b in sorted(lab9["borough_code"].dropna().unique())
                              if (lab9["borough_code"] == b).sum() >= 200}
     nf = never_filers(fac, 9)
-    X_nf = build_features(fac, nf, CYCLE_START[9], 9)
+    X_nf = feature_matrix(ctx, nf, CYCLE_START[9], 9)
     primary["never_filers"] = {
         "n_never_filed": int(len(nf)), "n_labeled": int(len(lab9)),
         "last_status_share_never_filers": X_nf["last_status"].value_counts(normalize=True).round(3).to_dict(),
@@ -116,7 +125,7 @@ def run() -> dict:
         "mean_predicted_never_filers": float(calibrator.predict(final.predict_proba(X_nf)[:, 1]).mean()) if len(nf) else None,
     }
     contrib = final.get_booster().predict(xgb.DMatrix(X9), pred_contribs=True)[:, :-1]
-    primary["mean_abs_shap"] = dict(sorted(zip(FACADE_FEATURES, np.abs(contrib).mean(0).round(4).tolist()),
+    primary["mean_abs_shap"] = dict(sorted(zip(X9.columns, np.abs(contrib).mean(0).round(4).tolist()),
                                            key=lambda kv: -kv[1])[:15])
     report["primary_cycle9"] = primary
 
@@ -133,11 +142,11 @@ def run() -> dict:
     # Same information date as DOB: every system scores cycle-10 filers using only data before 2022-03-17.
     offset = DOB_FACADE_RISK_SNAPSHOT - CYCLE_START[9]
     vantage = {t: CYCLE_START[t - 1] + offset for t in (7, 8)}  # 2007-03-17 -> cycle 7, 2012-03-17 -> cycle 8
-    dv7, dv8 = make_dataset(fac, 7, vantage[7]), make_dataset(fac, 8, vantage[8])
+    dv7, dv8 = make_dataset(ctx, 7, vantage[7]), make_dataset(ctx, 8, vantage[8])
     fv, cv, lv, rv = fit_all([to_xy(dv7), to_xy(dv8)], to_xy(dv8))
     lab10 = build_labels(fac, 10)
     common10 = lab10.index.intersection(dob.index)
-    X10v = build_features(fac, common10, DOB_FACADE_RISK_SNAPSHOT, 10)
+    X10v = feature_matrix(ctx, common10, DOB_FACADE_RISK_SNAPSHOT, 10)
     y10 = lab10.loc[common10, "y"].to_numpy()
     s10v = {**score_methods(X10v, fv, cv, lv), "dob_predprob_2022": dob.reindex(common10).to_numpy()}
     matched = compare(y10, s10v, against=("dob_predprob_2022", "rule_prev_status"))
@@ -152,7 +161,7 @@ def run() -> dict:
 
     # ---- Current capability: decision at the start of cycle 10 ------------------------------------------
     ft, ct, lt, rt = fit_all([to_xy(d7), to_xy(d8), to_xy(d9)], to_xy(d9))
-    X10 = build_features(fac, lab10.index, CYCLE_START[10], 10)
+    X10 = feature_matrix(ctx, lab10.index, CYCLE_START[10], 10)
     s10 = score_methods(X10, ft, ct, lt)
     current = compare(lab10["y"].to_numpy(), s10)
     current["caveat"] = "Incomplete cycle; early filers are not representative (see by_subcycle)."
@@ -201,7 +210,7 @@ def write_markdown(report: dict) -> str:
     for name, block in p["subgroups"].items():
         table(f"Cycle 9 subgroup: {name}", block)
     cal = p["calibration"]["xgboost_calibrated"]
-    lines.extend([f"Calibration (cycle 9, isotonic from cycle 8): Brier {cal['brier']:.4f}, ECE {cal['ece']:.4f}, "
+    lines.extend([f"Calibration (cycle 9, Platt scaling fit on cycle 8): Brier {cal['brier']:.4f}, ECE {cal['ece']:.4f}, "
                   f"mean predicted {cal['mean_predicted']:.3f} vs observed {cal['observed_rate']:.3f}", "",
                   "By sub-cycle (xgboost): " + ", ".join(f"{k}: PR-AUC {_fmt(v['pr_auc'])} (base {_fmt(v['base_rate'])}, n={v['n']})"
                                                          for k, v in p["by_subcycle"].items()), "",

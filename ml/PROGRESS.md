@@ -1,5 +1,43 @@
 # ML workstream — running progress note
 
+## 2026-10-17 13:20 EDT — Step 2: extra sources help; deployed model = façade + DOB + ECB + building attributes
+
+**Ablation.** Same cycle-9 test, paired bootstrap against façade-only (`reports/ABLATION.md`):
+
+| Variant | PR-AUC | P@500 | prev-SAFE P@250 | Δ PR-AUC (95% CI) |
+|---|---|---|---|---|
+| Façade only | 0.379 | 0.522 | 0.324 | — |
+| + DOB violations | 0.417 | 0.618 | 0.296 | +0.039 (+0.030, +0.049) |
+| + ECB violations | 0.388 | 0.572 | 0.344 | +0.010 (+0.003, +0.016) |
+| + complaints | 0.377 | 0.522 | 0.296 | −0.002 (n.s.), **dropped** |
+| + building attributes (PLUTO) | 0.418 | 0.622 | 0.356 | +0.040 (+0.029, +0.050) |
+| + DOB + ECB (no PLUTO snapshot) | 0.424 | 0.610 | 0.324 | +0.045 (+0.035, +0.054) |
+| **+ DOB + ECB + building (deployed)** | **0.454** | **0.662** | **0.384** | **+0.075 (+0.064, +0.087)** |
+
+- The "echo" sensitivity check gives 0.448: dropping label-echo codes within 90 days of the cutoff changes nothing.
+
+**Headline results (cycle 9, n=13,327, base 0.250):**
+- **Deployed model PR-AUC 0.454 vs rule 0.358** (+0.096, CI +0.083 to +0.108).
+- **P@500 0.662 vs rule 0.560** (+0.102, CI +0.050 to +0.148).
+- **Previously-SAFE subgroup** (n=4,253, base 0.183):
+  - PR-AUC 0.289 vs rule 0.205 (+0.084, CI +0.062 to +0.110).
+  - **Top 250 are 38.4% newly UNSAFE (2.1× base).** Most of that lift comes from building attributes plus DOB history.
+- **No prior FISP filing** (n=1,441): PR-AUC 0.321 vs base 0.173.
+- **vs DOB's published 2022 score on identical buildings (cycle 9):** PR-AUC 0.461 vs 0.341, P@500 0.660 vs 0.402.
+  - This setting *favors DOB*, whose model may have seen cycle-9 outcomes.
+- **Matched information date** (2022-03-17 → cycle-10 filers): 0.668 vs DOB 0.414.
+  - **Inflated by selection.** Non-compliance features predict who appears among the early cycle-10 filers (77%
+    skipped cycle 9). Cycle 9 is the number to quote.
+- **Calibration:** switched to Platt scaling, because isotonic plateaued at p=1.0 and tied the top ranks. Cycle-9 ECE
+  0.036; mean predicted 0.256 vs observed 0.250.
+- **Same-vantage backtest** for the live model: PR-AUC 0.466 vs rule 0.363 (n=11,643 buildings pending 1.65 years
+  into cycle 9).
+
+**Caveats:**
+- PLUTO is a 2026 snapshot. Lot area and building class are near-static, but they are not true point-in-time values.
+  The PLUTO-free variant still gains +0.045.
+- `lot_area` partly flags large multi-building developments.
+
 ## 2026-10-17 13:05 EDT — integration layer ready (scores + API + contract + LinuxONE runbook)
 
 **Works.**
