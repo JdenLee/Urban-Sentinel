@@ -1,0 +1,7 @@
+# Pinned to the packages shipped in IBM's jupyterlab-image-s390x (LinuxONE Community Cloud).
+# They are preinstalled in the `notebook` container; install locally with a Python 3.12 venv.
+numpy==2.0.2
+pandas==3.0.6
+scikit-learn==1.9.0
+xgboost==3.4.1
+pytest
