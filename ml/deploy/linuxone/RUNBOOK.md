@@ -73,9 +73,11 @@ podman logs -f urban-api      # Ctrl-C to stop following
 
 Restart the API after re-training (it loads the model at start-up):
 ```bash
-podman exec notebook pkill -f "uvicorn urban_sentinel" ; sleep 2
+# the IBM image has no pkill, so stop the server with Python
+podman exec notebook python3 -c "import os,signal; [os.kill(int(p),signal.SIGTERM) for p in os.listdir('/proc') if p.isdigit() and b'urban_sentinel.serve' in open(f'/proc/{p}/cmdline','rb').read()]"
+podman top notebook | grep uvicorn      # should print nothing
 ```
-then run the step-5 start command again. Benchmark/evidence for the accelerator:
+then run the step-5 start command again. Start-up takes about 30 s (NNPA parity check). If curl gets no answer, run the start command without `-d` to see errors. Benchmark/evidence for the accelerator:
 `podman exec -w /home/ibm-user/shared/megatron-ml/ml -e PYTHONPATH=/home/ibm-user/shared/pydeps notebook python3 -m urban_sentinel.nnpa_bench`
 
 ## 6. Reach it from a laptop through SSH (the frontend uses http://localhost:8000)
