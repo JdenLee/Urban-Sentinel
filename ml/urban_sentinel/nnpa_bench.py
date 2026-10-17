@@ -99,6 +99,77 @@ def timed(fn, repeats: int) -> tuple[object, float]:
     return result, (time.perf_counter() - t0) / repeats * 1000
 
 
+SENTINEL = -1e6  # below every feature's real range (days_vs_deadline_last can be about -1,000)
+
+
+def compare_formats(snapml, model_path, Xnp: np.ndarray, ref: np.ndarray) -> dict:
+    complete = ~np.isnan(Xnp).any(axis=1)
+    order_ref = np.argsort(-ref, kind="stable")
+    out = {}
+    for fmt in ("compress_trees", "zdnn_tensors", "auto"):
+        entry: dict = {}
+        try:
+            sm = snapml.BoostingMachineClassifier()
+            sm.import_model(str(model_path), "xgb_json", tree_format=fmt, X=Xnp)
+            entry["optimized_tree_format_"] = getattr(sm.booster_, "optimized_tree_format_", None)
+            pred, ms = timed(lambda: sm.predict_proba(Xnp)[:, 1], 5)
+            _, ms1 = timed(lambda: sm.predict_proba(Xnp[:1])[:, 1], 200)
+            diff = np.abs(pred - ref)
+            top500 = set(np.argsort(-pred, kind="stable")[:500])
+            entry.update({
+                "batch_ms": round(ms, 3), "single_row_ms": round(ms1, 4),
+                "max_abs_diff_vs_xgboost": float(diff.max()), "mean_abs_diff_vs_xgboost": float(diff.mean()),
+                "spearman_vs_xgboost": float(pd.Series(pred).rank().corr(pd.Series(ref).rank())),
+                "top500_overlap": len(top500 & set(order_ref[:500])) / 500,
+                "rows_without_missing": int(complete.sum()),
+                "max_abs_diff_rows_without_missing": float(diff[complete].max()) if complete.any() else None,
+            })
+        except Exception as exc:  # record honestly: unsupported format, zDNN errors
+            entry["error"] = f"{type(exc).__name__}: {exc}"
+        out[fmt] = entry
+    return out
+
+
+def nan_free_variant(snapml, model: DeployedModel, Xnp: np.ndarray, ref_deployed: np.ndarray) -> dict:
+    """Retrain the deployed configuration with NaN -> SENTINEL, check its accuracy is unchanged (same-vantage
+    backtest), then compare Snap ML vs XGBoost on it."""
+    from .artifacts import MODEL_DIR
+    from .config import CYCLE_START
+    from .evaluation import ranking_metrics
+    from .models import fit_xgb
+    from .score import vantage_dataset
+
+    ctx = Context.load()
+    now = pd.Timestamp.now().normalize()
+    current = cycle_at(now)
+    elapsed = now - CYCLE_START[current]
+    feats = model.meta["features"]
+    data = {t: vantage_dataset(ctx, t, elapsed) for t in (current - 3, current - 2, current - 1)}
+    fill = lambda X: X[feats].fillna(SENTINEL)
+    t1, t2, t3 = sorted(data)
+    rounds = int(model.meta["xgb_rounds"] * 1.15)
+    out: dict = {"sentinel": SENTINEL}
+    # Accuracy check at the same vantage: NaN-native vs sentinel, train t1+t2 -> test t3.
+    for name, prep in [("nan_native", lambda X: X[feats]), ("sentinel", fill)]:
+        m = fit_xgb(pd.concat([prep(data[t1][0]), prep(data[t2][0])]),
+                    pd.concat([data[t1][1]["y"], data[t2][1]["y"]]), n_estimators=rounds)
+        out[f"backtest_{name}"] = ranking_metrics(data[t3][1]["y"], m.predict_proba(prep(data[t3][0]))[:, 1])
+    final = fit_xgb(pd.concat([fill(data[t][0]) for t in (t1, t2, t3)]),
+                    pd.concat([data[t][1]["y"] for t in (t1, t2, t3)]), n_estimators=rounds)
+    native = MODEL_DIR / "facade_unsafe_xgb_sentinel.json"
+    final.get_booster().save_model(str(native))
+    legacy = MODEL_DIR / "facade_unsafe_xgb_sentinel_legacy_xgb1.json"
+    legacy_xgb_json(native, legacy)
+    Xf = np.where(np.isnan(Xnp), SENTINEL, Xnp).astype(np.float32)
+    booster = final.get_booster()
+    ref, ms = timed(lambda: booster.inplace_predict(Xf), 5)
+    _, ms1 = timed(lambda: booster.inplace_predict(Xf[:1]), 200)
+    out.update({"xgboost_batch_ms": round(ms, 3), "xgboost_single_row_ms": round(ms1, 4),
+                "spearman_vs_deployed_model": float(pd.Series(ref).rank().corr(pd.Series(ref_deployed).rank())),
+                "formats": compare_formats(snapml, legacy, Xf, ref)})
+    return out
+
+
 def pending_features() -> pd.DataFrame:
     ctx = Context.load()
     now = pd.Timestamp.now().normalize()
@@ -167,41 +238,34 @@ def run() -> dict:
         return report
     report["snapml"]["model_file"] = chosen.name
 
-    report["snapml"]["formats"] = {}
-    order_ref = np.argsort(-ref, kind="stable")
-    for fmt in ("compress_trees", "zdnn_tensors", "auto"):
-        entry: dict = {}
-        try:
-            sm = snapml.BoostingMachineClassifier()
-            sm.import_model(str(chosen), "xgb_json", tree_format=fmt, X=Xnp)
-            entry["optimized_tree_format_"] = getattr(sm.booster_, "optimized_tree_format_", None)
-            pred, ms = timed(lambda: sm.predict_proba(Xnp)[:, 1], 5)
-            _, ms1 = timed(lambda: sm.predict_proba(Xnp[:1])[:, 1], 200)
-            diff = np.abs(pred - ref)
-            top500_ref = set(order_ref[:500])
-            top500 = set(np.argsort(-pred, kind="stable")[:500])
-            entry.update({
-                "batch_ms": round(ms, 3), "single_row_ms": round(ms1, 4),
-                "max_abs_diff_vs_xgboost": float(diff.max()), "mean_abs_diff_vs_xgboost": float(diff.mean()),
-                "spearman_vs_xgboost": float(pd.Series(pred).rank().corr(pd.Series(ref).rank())),
-                "top500_overlap": len(top500 & top500_ref) / 500,
-            })
-        except Exception as exc:  # record honestly: unsupported format, missing values, zDNN errors
-            entry["error"] = f"{type(exc).__name__}: {exc}"
-        report["snapml"]["formats"][fmt] = entry
+    report["snapml"]["formats"] = compare_formats(snapml, chosen, Xnp, ref)
+
+    # Diagnosis + fix: Snap ML's importer may not honour XGBoost's learned default direction for missing
+    # values. A variant trained with missing values encoded as an out-of-range sentinel never sees NaN.
+    report["nan_free_variant"] = nan_free_variant(snapml, model, Xnp, ref)
 
     z = report["snapml"]["formats"].get("zdnn_tensors", {})
-    on_nnpa = z.get("optimized_tree_format_") == "zdnn_tensors" and "error" not in z
-    faithful = on_nnpa and z["spearman_vs_xgboost"] > 0.999 and z["max_abs_diff_vs_xgboost"] < 1e-2
-    if faithful:
-        report["verdict"] = (f"VERIFIED: model served on the NNPA (zdnn_tensors); batch {z['batch_ms']} ms vs XGBoost "
-                             f"{report['xgboost']['batch_ms']} ms for {report['n_buildings']} buildings; "
-                             f"max |Δp| {z['max_abs_diff_vs_xgboost']:.2e}")
-    elif on_nnpa:
-        report["verdict"] = "NNPA format accepted but predictions diverge from XGBoost: do not deploy"
+    nf = report["nan_free_variant"]
+    zf = nf.get("formats", {}).get("zdnn_tensors", {})
+
+    def faithful(e):
+        return (e.get("optimized_tree_format_") == "zdnn_tensors" and "error" not in e
+                and e["spearman_vs_xgboost"] > 0.999 and e["max_abs_diff_vs_xgboost"] < 1e-2)
+
+    if faithful(z):
+        report["verdict"] = (f"VERIFIED: deployed model served on the NNPA (zdnn_tensors); batch {z['batch_ms']} ms "
+                             f"vs XGBoost {report['xgboost']['batch_ms']} ms; max |dp| {z['max_abs_diff_vs_xgboost']:.2e}")
+    elif faithful(zf):
+        report["verdict"] = (f"VERIFIED for the NaN-free variant: served on the NNPA (zdnn_tensors) matching XGBoost "
+                             f"(max |dp| {zf['max_abs_diff_vs_xgboost']:.2e}, Spearman {zf['spearman_vs_xgboost']:.5f}); "
+                             f"batch {zf['batch_ms']} ms vs XGBoost {nf['xgboost_batch_ms']} ms, single row "
+                             f"{zf['single_row_ms']} ms vs {nf['xgboost_single_row_ms']} ms. Deployed model diverges "
+                             f"because of missing-value handling.")
+    elif z.get("optimized_tree_format_") == "zdnn_tensors":
+        report["verdict"] = "NNPA format accepted but predictions diverge from XGBoost (also for the NaN-free variant): do not deploy"
     else:
         reason = z.get("error") or f"optimized_tree_format_={z.get('optimized_tree_format_')}"
-        report["verdict"] = f"NOT ON NNPA ({reason}); CPU Snap ML/XGBoost remain the serving path"
+        report["verdict"] = f"NOT ON NNPA ({reason}); XGBoost remains the serving path"
     return report
 
 
