@@ -1,0 +1,174 @@
+{
+  "platform": {
+    "timestamp_utc": "2026-10-17T20:39:04.459203+00:00",
+    "machine": "s390x",
+    "system": "Linux",
+    "platform": "Linux-5.14.0-687.58.1.el9_8.s390x-s390x-with-glibc2.39",
+    "byteorder": "big",
+    "python": "3.12.15",
+    "cpu": "features\t: esan3 zarch stfle msa ldisp eimm dfp edat etf3eh highgprs te vx vxd vxe gs vxe2 vxp sort dflt vxp2 nnpa sie",
+    "packages": {
+      "numpy": "2.0.2",
+      "pandas": "3.0.6",
+      "scikit-learn": "1.9.0",
+      "xgboost": "3.4.1",
+      "fastapi": "0.143.3",
+      "uvicorn": "0.54.0"
+    }
+  },
+  "cpu_flag_nnpa": true,
+  "zdnn_candidates": [
+    "libzdnn.so.0",
+    "/usr/local/lib/libzdnn.so",
+    "/usr/local/lib/libzdnn.so.0"
+  ],
+  "zdnn": [
+    {
+      "path": "libzdnn.so.0",
+      "nnpa_installed": true,
+      "library_version": "1.1.2"
+    },
+    {
+      "path": "/usr/local/lib/libzdnn.so",
+      "nnpa_installed": true,
+      "library_version": "1.1.2"
+    },
+    {
+      "path": "/usr/local/lib/libzdnn.so.0",
+      "nnpa_installed": true,
+      "library_version": "1.1.2"
+    }
+  ],
+  "n_buildings": 13650,
+  "nan_fraction": 0.062275076521651866,
+  "model_sha256": "f12061750b25f7a4",
+  "xgboost": {
+    "batch_ms": 20.987,
+    "single_row_ms": 0.2672
+  },
+  "snapml": {
+    "version": null,
+    "import_warnings": [
+      "numpy.core._multiarray_umath is deprecated and has been renamed to numpy._core._multiarray_umath. The numpy._core namespace contains private NumPy internals and its use is discouraged, as NumPy internals can change without warning in any release. In practice, most real-world usage of numpy.core is to access functionality in the public NumPy API. If that is the case, use the public NumPy API. If not, you are using NumPy internals. If you would still like to access an internal attribute, use numpy._core._multiarray_umath.__cpu_features__."
+    ],
+    "import_attempts": {
+      "native_xgb3": "Error: no objective defined in /home/ibm-user/shared/megatron-ml/data/models/facade_unsafe_xgb.json",
+      "legacy_xgb1": "imported"
+    },
+    "model_file": "facade_unsafe_xgb_legacy_xgb1.json",
+    "formats": {
+      "compress_trees": {
+        "optimized_tree_format_": "compress_trees",
+        "batch_ms": 28.958,
+        "single_row_ms": 0.0095,
+        "max_abs_diff_vs_xgboost": 0.545397072355555,
+        "mean_abs_diff_vs_xgboost": 0.1397005660276941,
+        "spearman_vs_xgboost": 0.7297140740341432,
+        "top500_overlap": 0.758,
+        "rows_without_missing": 82,
+        "max_abs_diff_rows_without_missing": 2.242149183540043e-07
+      },
+      "zdnn_tensors": {
+        "optimized_tree_format_": "zdnn_tensors",
+        "batch_ms": 128.66,
+        "single_row_ms": 0.0221,
+        "max_abs_diff_vs_xgboost": 0.2946883585469574,
+        "mean_abs_diff_vs_xgboost": 0.04091828935211636,
+        "spearman_vs_xgboost": 0.9615523641253635,
+        "top500_overlap": 0.944,
+        "rows_without_missing": 82,
+        "max_abs_diff_rows_without_missing": 2.242149183540043e-07
+      },
+      "auto": {
+        "optimized_tree_format_": "zdnn_tensors",
+        "batch_ms": 127.754,
+        "single_row_ms": 0.0218,
+        "max_abs_diff_vs_xgboost": 0.2946883585469574,
+        "mean_abs_diff_vs_xgboost": 0.04091828935211636,
+        "spearman_vs_xgboost": 0.9615523641253635,
+        "top500_overlap": 0.944,
+        "rows_without_missing": 82,
+        "max_abs_diff_rows_without_missing": 2.242149183540043e-07
+      }
+    }
+  },
+  "model_file_candidates": [
+    "native_xgb3",
+    "legacy_xgb1",
+    "legacy_xgb1_named"
+  ],
+  "nan_free_variant": {
+    "sentinel": -1000000.0,
+    "backtest_nan_native": {
+      "n": 11643,
+      "positives": 2881,
+      "base_rate": 0.24744481662801684,
+      "pr_auc": 0.46505368553544935,
+      "roc_auc": 0.6957850080112277,
+      "precision@250": 0.82,
+      "recall@250": 0.07115584866365846,
+      "lift@250": 3.313870183963901,
+      "precision@500": 0.75,
+      "recall@500": 0.13016313779937522,
+      "lift@500": 3.030978826796251,
+      "precision@1000": 0.601,
+      "recall@1000": 0.20860812217979868,
+      "lift@1000": 2.428824366539396
+    },
+    "backtest_sentinel": {
+      "n": 11643,
+      "positives": 2881,
+      "base_rate": 0.24744481662801684,
+      "pr_auc": 0.46796602868348275,
+      "roc_auc": 0.691869992388482,
+      "precision@250": 0.824,
+      "recall@250": 0.07150295036445678,
+      "lift@250": 3.330035404373481,
+      "precision@500": 0.746,
+      "recall@500": 0.12946893439777854,
+      "lift@500": 3.0148136063866713,
+      "precision@1000": 0.604,
+      "recall@1000": 0.20964942728219368,
+      "lift@1000": 2.440948281846581
+    },
+    "xgboost_batch_ms": 48.724,
+    "xgboost_single_row_ms": 0.0867,
+    "spearman_vs_deployed_model": 0.9831730441625901,
+    "formats": {
+      "compress_trees": {
+        "optimized_tree_format_": "compress_trees",
+        "batch_ms": 29.94,
+        "single_row_ms": 0.0095,
+        "max_abs_diff_vs_xgboost": 3.829529070797921e-07,
+        "mean_abs_diff_vs_xgboost": 6.732400152295109e-08,
+        "spearman_vs_xgboost": 0.9999999999504582,
+        "top500_overlap": 1.0,
+        "rows_without_missing": 13650,
+        "max_abs_diff_rows_without_missing": 3.829529070797921e-07
+      },
+      "zdnn_tensors": {
+        "optimized_tree_format_": "zdnn_tensors",
+        "batch_ms": 134.09,
+        "single_row_ms": 0.0216,
+        "max_abs_diff_vs_xgboost": 3.829529070797921e-07,
+        "mean_abs_diff_vs_xgboost": 6.732400152295109e-08,
+        "spearman_vs_xgboost": 0.9999999999504582,
+        "top500_overlap": 1.0,
+        "rows_without_missing": 13650,
+        "max_abs_diff_rows_without_missing": 3.829529070797921e-07
+      },
+      "auto": {
+        "optimized_tree_format_": "zdnn_tensors",
+        "batch_ms": 132.811,
+        "single_row_ms": 0.0256,
+        "max_abs_diff_vs_xgboost": 3.829529070797921e-07,
+        "mean_abs_diff_vs_xgboost": 6.732400152295109e-08,
+        "spearman_vs_xgboost": 0.9999999999504582,
+        "top500_overlap": 1.0,
+        "rows_without_missing": 13650,
+        "max_abs_diff_rows_without_missing": 3.829529070797921e-07
+      }
+    }
+  },
+  "verdict": "VERIFIED for the NaN-free variant: served on the NNPA (zdnn_tensors) matching XGBoost (max |dp| 3.83e-07, Spearman 1.00000); batch 134.09 ms vs XGBoost 48.724 ms, single row 0.0216 ms vs 0.0867 ms. Deployed model diverges because of missing-value handling."
+}
