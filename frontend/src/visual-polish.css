@@ -1,0 +1,96 @@
+/* Isolated cinematic preview. No score, priority-colour or data-contract changes. */
+:root {
+  --panel: rgba(11, 19, 31, 0.93);
+  --panel-solid: #0c1522;
+  --border: rgba(158, 184, 218, 0.18);
+  --text: #edf3fa;
+  --muted: #a5b4c8;
+  --faint: #8394ad;
+}
+
+.topbar {
+  top: 0; left: 0; right: 0; padding: 18px 20px 15px;
+  background: linear-gradient(180deg, rgba(5, 11, 20, 0.98), rgba(5, 11, 20, 0.76) 70%, transparent);
+}
+.brand { padding-left: 10px; border-left: 2px solid rgba(95, 242, 255, 0.7); }
+.title { font-size: 19px; letter-spacing: -0.025em; font-weight: 600; }
+.subtitle { letter-spacing: 0.045em; margin-top: 5px; }
+.badge { background: rgba(12, 22, 36, 0.92); backdrop-filter: none; }
+.badge--mock { background: var(--mock); }
+.panel {
+  backdrop-filter: blur(8px);
+  box-shadow: 0 14px 42px rgba(0, 0, 0, 0.3), inset 0 1px rgba(212, 230, 255, 0.05);
+}
+.sidebar { top: 86px; max-height: calc(100% - 108px); padding: 16px; gap: 16px; }
+.building-panel {
+  top: 86px; max-height: calc(100% - 108px); padding: 18px 18px 14px;
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.38), inset 0 2px color-mix(in srgb, var(--accent) 60%, transparent);
+  animation-duration: 650ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+.building-panel__title { font-size: 22px; letter-spacing: -0.025em; line-height: 1.2; }
+.within-cap { display: inline-block; white-space: nowrap; }
+.score__value { font-size: 44px; text-shadow: none; letter-spacing: -0.06em; }
+.score__label { letter-spacing: 0.04em; }
+.score-def { color: var(--muted); line-height: 1.65; }
+.score-bar { height: 4px; margin: 12px 0; }
+.score-bar__fill { box-shadow: none; }
+.section-title { color: #bcc9db; letter-spacing: 0.09em; }
+.search__input { height: 38px; background: rgba(131, 160, 201, 0.06); }
+.toplist__item { padding: 8px; transition: background 180ms ease, border-color 180ms ease; }
+.toplist__item.is-active { background: rgba(95, 242, 255, 0.08); border-color: rgba(95, 242, 255, 0.25); }
+.swatch { box-shadow: none; }
+.legend__row { padding-top: 5px; padding-bottom: 5px; }
+.tabs { background: rgba(3, 9, 18, 0.5); gap: 4px; padding: 4px; }
+.tabs__tab { height: 32px; transition: background 180ms ease, color 180ms ease; }
+.tabs__tab.is-active { background: rgba(144, 185, 232, 0.14); }
+.btn { transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease; }
+.btn--primary { background: linear-gradient(135deg, rgba(71, 143, 172, 0.38), rgba(37, 79, 130, 0.42)); }
+.btn--primary:hover:not(:disabled) { box-shadow: 0 0 20px rgba(95, 242, 255, 0.1); }
+.building-panel__body { scrollbar-gutter: stable; }
+.sidebar, .building-panel__body, .toplist { scrollbar-width: thin; scrollbar-color: #34465e transparent; }
+.vignette {
+  background: radial-gradient(ellipse at 52% 44%, transparent 50%, rgba(2, 7, 15, 0.38) 100%);
+}
+.app--demo .sidebar { opacity: 0.82; }
+.demo-strip {
+  bottom: 24px; width: min(560px, calc(100% - 32px));
+  border-color: rgba(112, 184, 214, 0.32); background: rgba(8, 17, 29, 0.96);
+  animation: demo-strip-enter 400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.demo-strip__dot { background: var(--cyan); box-shadow: 0 0 8px rgba(95, 242, 255, 0.4); animation: none; }
+.demo-strip__track { height: 2px; }
+.demo-strip__fill {
+  width: 100%; transform-origin: left;
+  animation: demo-progress linear forwards;
+}
+@keyframes demo-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes demo-strip-enter {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@media (min-width: 1101px) {
+  .app--panel .maplibregl-ctrl-bottom-right { right: 404px; }
+}
+@media (max-width: 1100px) {
+  .title { font-size: 17px; }
+  .topbar { gap: 8px; }
+  .badge { font-size: 11px; padding: 6px 9px; }
+}
+@media (max-width: 760px) {
+  .topbar { padding: 10px 8px 18px; }
+  .title { font-size: 15px; }
+  .sidebar { top: 0; max-height: none; padding-top: 60px; }
+  .building-panel { top: auto; max-height: 58%; padding: 14px; }
+  .building-panel__title { font-size: 19px; }
+  .demo-strip { bottom: 12px; }
+  .app--panel .demo-strip { bottom: calc(58% + 40px); }
+  .demo-strip__stage { font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .building-panel, .demo-strip { animation: none; }
+  .demo-strip__fill { animation: none; transform: scaleX(1); }
+  .toplist__item, .tabs__tab, .btn { transition: none; }
+}

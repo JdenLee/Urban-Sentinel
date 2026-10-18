@@ -1,7 +1,6 @@
 import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react';
-import Map, { NavigationControl, useControl, type MapRef } from 'react-map-gl/maplibre';
-import { MapboxOverlay, type MapboxOverlayProps } from '@deck.gl/mapbox';
-import type { PickingInfo } from '@deck.gl/core';
+import Map, { NavigationControl, type MapRef } from 'react-map-gl/maplibre';
+import { AmbientLight, DirectionalLight, LightingEffect, type PickingInfo } from '@deck.gl/core';
 import type { StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { DataMode, JoinedFeature, JoinResult, Priority } from '../types/predictions';
@@ -9,14 +8,9 @@ import { buildingRiskLayers } from '../layers/buildingRiskLayer';
 import { movementHexagonLayer, movementPoints, type MovementPointDatum } from '../layers/movementHexagonLayer';
 import { PRIORITY_LABEL } from '../data/priority';
 import { DEMO_BBOX, INITIAL_VIEW } from '../camera';
+import { CinematicOverlay } from './CinematicOverlay';
 
 export const BASEMAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
-
-function DeckGLOverlay(props: MapboxOverlayProps) {
-  const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
-  overlay.setProps(props);
-  return null;
-}
 
 const [W, S, E, N] = DEMO_BBOX;
 const DEMO_AREA_POLYGON = {
@@ -126,19 +120,11 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
     [externalMovement, join, dataMode],
   );
 
-  // Gentle pulse for the selection beacon; stops when nothing is selected.
-  const [pulse, setPulse] = useState(0);
-  useEffect(() => {
-    if (!selectedBin) return;
-    let raf = 0;
-    const start = performance.now();
-    const tick = (t: number) => {
-      setPulse((Math.sin(((t - start) / 1400) * Math.PI * 2) + 1) / 2);
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [selectedBin]);
+  const effects = useMemo(() => [new LightingEffect({
+    ambient: new AmbientLight({ color: [225, 235, 255], intensity: 1.0 }),
+    key: new DirectionalLight({ color: [255, 245, 230], intensity: 1.0, direction: [-3, -5, -4] }),
+    fill: new DirectionalLight({ color: [165, 200, 255], intensity: 0.35, direction: [3, 1, -2] }),
+  })], []);
 
   const layers = useMemo(
     () => [
@@ -150,11 +136,11 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
         selectedBin,
         visiblePriorities,
         capacityCutoff,
-        pulse,
+        pulse: 0.4,
         highlight,
       }),
     ],
-    [points, showMovement, hexRadius, context, join.scored, showRisk, selectedBin, visiblePriorities, capacityCutoff, pulse, highlight],
+    [points, showMovement, hexRadius, context, join.scored, showRisk, selectedBin, visiblePriorities, capacityCutoff, highlight],
   );
 
   const onClick = useCallback(
@@ -197,7 +183,7 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
       style={{ position: 'absolute', inset: 0 }}
     >
       <NavigationControl position="bottom-right" visualizePitch />
-      <DeckGLOverlay interleaved layers={layers} onClick={onClick} getTooltip={getTooltip} />
+      <CinematicOverlay interleaved layers={layers} effects={effects} onClick={onClick} getTooltip={getTooltip} />
     </Map>
   );
 });
