@@ -15,6 +15,9 @@ import { ASSIGNMENT_LABEL, ASSIGNMENT_STATUSES, type AssignmentStatus } from '..
 import { RECORD_TYPES } from '../data/loadHistory';
 import { LiveRescore } from './LiveRescore';
 import { buildingName, landmarkFor } from '../data/landmarks';
+import { useDragSheet } from '../motion/useDragSheet';
+import { useMediaQuery } from '../motion/useMediaQuery';
+import { usePress } from '../motion/usePress';
 
 const FACTOR_LABELS: Record<string, { label: string; unit?: string }> = {
   sar_velocity_mm_year: { label: 'LOS velocity', unit: 'mm/yr' },
@@ -42,6 +45,22 @@ const TAB_LABEL: Record<Tab, string> = { overview: 'Overview', evidence: 'Eviden
 /** Scored buildings get the model tabs; every building gets its recorded history. */
 export function panelTabs(scored: boolean): Tab[] {
   return scored ? ['overview', 'evidence', 'history'] : ['history'];
+}
+
+/** Separate component so each tab can own the pointer-down hook; the panel switches before the lift. */
+function TabButton({ tab, active, onSelect }: { tab: Tab; active: boolean; onSelect: (t: Tab) => void }) {
+  const press = usePress<HTMLButtonElement>(() => onSelect(tab));
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      className={`tabs__tab${active ? ' is-active' : ''}`}
+      {...press}
+    >
+      {TAB_LABEL[tab]}
+    </button>
+  );
 }
 
 /** How many timeline entries to show before "Show all". */
@@ -86,8 +105,14 @@ export function BuildingPanel(props: BuildingPanelProps) {
   const landmark = landmarkFor(bin);
   const onRecord = data?.fisp?.statusOnRecord ?? null;
 
+  // Below this width glass.css lays the record out as a bottom sheet, which is the only form that
+  // can be dragged away. Asking the same query the stylesheet used keeps the two in step.
+  const isSheet = useMediaQuery('(max-width: 760px)');
+  const { sheetRef, grabberProps } = useDragSheet(isSheet, onClose);
+
   return (
-    <aside className="panel building-panel" aria-label="Selected building" style={{ ['--accent' as string]: color }}>
+    <aside ref={sheetRef} className="panel building-panel" aria-label="Selected building" style={{ ['--accent' as string]: color }}>
+      <button type="button" className="sheet-grabber" aria-label="Drag down to close" {...grabberProps} />
       <header className="building-panel__head">
         <div>
           <div className="eyebrow">
@@ -121,16 +146,7 @@ export function BuildingPanel(props: BuildingPanelProps) {
       {tabs.length > 1 && (
         <div className="tabs" role="tablist" aria-label="Building details">
           {tabs.map((t) => (
-            <button
-              key={t}
-              type="button"
-              role="tab"
-              aria-selected={active === t}
-              className={`tabs__tab${active === t ? ' is-active' : ''}`}
-              onClick={() => setTab(t)}
-            >
-              {TAB_LABEL[t]}
-            </button>
+            <TabButton key={t} tab={t} active={active === t} onSelect={setTab} />
           ))}
         </div>
       )}

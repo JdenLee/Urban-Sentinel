@@ -1,0 +1,619 @@
+/*
+ * Urban Sentinel surface layer.
+ *
+ * The map is the document; everything else floats above it on translucent panels that take their
+ * colour from the city underneath. Structure follows the Human Interface Guidelines: a fixed set of
+ * type roles, an 8pt spacing rhythm, hit targets that never fall below 44pt, continuous corners and
+ * materials rather than painted fills. Motion is spring-driven throughout — the curves in
+ * `--ease-*` are generated from the constants in motion/spring.ts and installed at startup, with
+ * the approximations below standing in until then.
+ *
+ * Restraint is the rule: the chrome is neutral and nearly colourless so that the only saturated
+ * colour on screen is data. The four priority colours come inline from priority.ts and are never
+ * restyled here — nothing in this file may tint a swatch, a score, or a map fill.
+ */
+:root {
+  /* ---- materials ---- */
+  --blur-thick: saturate(180%) blur(30px);
+  --blur-regular: saturate(180%) blur(22px);
+  --blur-thin: saturate(160%) blur(14px);
+  --mat-thick: rgba(22, 24, 28, 0.76);
+  --mat-regular: rgba(24, 26, 30, 0.62);
+  --mat-thin: rgba(28, 30, 34, 0.44);
+  --mat-opaque: #16181c;
+
+  /* ---- labels ---- */
+  --label: rgba(255, 255, 255, 0.94);
+  --label-2: rgba(235, 238, 245, 0.62);
+  --label-3: rgba(235, 238, 245, 0.38);
+  --label-4: rgba(235, 238, 245, 0.2);
+
+  /* ---- fills and separators ---- */
+  --fill-1: rgba(128, 132, 142, 0.38);
+  --fill-2: rgba(128, 132, 142, 0.26);
+  --fill-3: rgba(128, 132, 142, 0.16);
+  --fill-4: rgba(128, 132, 142, 0.1);
+  --separator: rgba(255, 255, 255, 0.11);
+  --separator-strong: rgba(255, 255, 255, 0.2);
+
+  /*
+   * One accent, used only for interactive affordance and system state. Green rather than blue
+   * because blue is already the Low-priority colour, and an accent must never be mistaken for a
+   * reading. systemGreen, dark.
+   */
+  --tint: #30d158;
+  --tint-quiet: rgba(48, 209, 88, 0.16);
+  --warn: #ffd60a;
+
+  /* ---- type roles ---- */
+  --t-large-title: 700 30px/1.12;
+  --t-title1: 700 23px/1.17;
+  --t-title2: 600 19px/1.22;
+  --t-title3: 600 16px/1.26;
+  --t-headline: 600 13px/1.35;
+  --t-body: 400 13px/1.45;
+  --t-callout: 400 12px/1.42;
+  --t-subhead: 500 12px/1.35;
+  --t-footnote: 400 11px/1.42;
+  --t-caption: 500 10px/1.3;
+
+  /* ---- rhythm, 8pt ---- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+
+  --r-sheet: 20px;
+  --r-card: 14px;
+  --r-control: 10px;
+  --r-small: 7px;
+  --r-pill: 999px;
+
+  --shadow-card: 0 10px 34px rgba(0, 0, 0, 0.42), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-float: 0 4px 16px rgba(0, 0, 0, 0.34), 0 1px 1px rgba(0, 0, 0, 0.26);
+
+  /* ---- geometry: floating chrome, so every edge keeps the same margin from the window ---- */
+  --inset: 12px;
+  --bar: 44px;
+  --rail: 322px;
+  --dock: 384px;
+  --rail-top: calc(var(--inset) + var(--bar) + var(--sp-2));
+
+  /* ---- motion: replaced at startup by real spring curves (motion/spring.ts) ---- */
+  --ease-press: cubic-bezier(0.34, 1.26, 0.64, 1);
+  --dur-press: 220ms;
+  --ease-pop: cubic-bezier(0.22, 1.2, 0.36, 1);
+  --dur-pop: 420ms;
+  --ease-panel: cubic-bezier(0.32, 0.94, 0.3, 1);
+  --dur-panel: 540ms;
+  --ease-sheet: cubic-bezier(0.32, 0.94, 0.3, 1);
+  --dur-sheet: 500ms;
+
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, 'SF Mono', 'SFMono-Regular', Menlo, 'JetBrains Mono', monospace;
+
+  /* Carried over for the base stylesheet, which still reasons in these names. */
+  --bg: #000;
+  --panel: var(--mat-regular);
+  --panel-solid: var(--mat-opaque);
+  --border: var(--separator);
+  --border-strong: var(--separator-strong);
+  --text: var(--label);
+  --muted: var(--label-2);
+  --faint: var(--label-3);
+  --cyan: var(--tint);
+  --radius: var(--r-card);
+  color-scheme: dark;
+}
+
+body { background: #000; font: var(--t-body) var(--font); color: var(--label); }
+.app { background: #000; }
+/* The city supplies the contrast now; a painted vignette would only mute it. */
+.vignette { display: none; }
+
+/* ---------- materials ---------- */
+.panel,
+.statusbar,
+.deck-tooltip,
+.maplibregl-ctrl-group {
+  background: var(--mat-regular);
+  backdrop-filter: var(--blur-regular);
+  -webkit-backdrop-filter: var(--blur-regular);
+  border: 1px solid var(--separator);
+  box-shadow: var(--shadow-card);
+}
+.panel { border-radius: var(--r-card); }
+
+/* ---------- interaction ---------- */
+/*
+ * Every control answers on pointer-down: `:active` is a press state, not a click state, so the
+ * surface has already moved before the finger lifts. The down state lands instantly and relaxes
+ * gently, which is what separates a physical control from a hover effect.
+ */
+.btn,
+.icon-btn,
+.chip,
+.tabs__tab,
+.toplist__item,
+.legend__row--btn,
+.search__item,
+.model-link,
+.drawer-btn,
+.text-link,
+.info-btn,
+.demo-strip__stop,
+.sheet-grabber {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: transform var(--dur-press) var(--ease-press), background-color 160ms linear,
+    border-color 160ms linear, color 160ms linear, opacity 160ms linear;
+}
+.btn:active,
+.chip:active,
+.model-link:active,
+.demo-strip__stop:active { transform: scale(0.965); transition: transform var(--dur-press) var(--ease-press), background-color 0s; }
+.icon-btn:active,
+.drawer-btn:active,
+.info-btn:active { transform: scale(0.9); transition: transform var(--dur-press) var(--ease-press), background-color 0s; }
+/* Wide rows take a smaller scale: the same ratio on a 300px row reads as a glitch. */
+.toplist__item:active,
+.legend__row--btn:active,
+.search__item:active,
+.tabs__tab:active { transform: scale(0.985); transition: transform var(--dur-press) var(--ease-press), background-color 0s; }
+.btn:active:not(:disabled),
+.toplist__item:active,
+.legend__row--btn:active,
+.search__item:active { background-color: var(--fill-1); }
+
+:where(button, a, input, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--tint);
+  outline-offset: 2px;
+}
+
+/*
+ * HIG asks for 44×44pt. Small controls keep their drawn size and grow an invisible hit area
+ * instead, so a dense desk panel stays dense without becoming hard to hit.
+ */
+.icon-btn, .info-btn, .drawer-btn { position: relative; }
+.icon-btn::after, .info-btn::after {
+  content: ''; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: max(100%, 44px); height: max(100%, 44px);
+}
+
+/* ---------- floating header ---------- */
+.topbar {
+  top: var(--inset); left: var(--inset); right: var(--inset);
+  gap: var(--sp-2); align-items: center; height: var(--bar);
+}
+.topbar > * { pointer-events: auto; }
+.brand, .map-edition, .model-link, .drawer-btn, .mock-label { border-radius: var(--r-control); }
+.drawer-btn {
+  width: var(--bar); height: var(--bar); flex: none; display: grid; place-items: center;
+  color: var(--label); background: var(--mat-regular);
+  backdrop-filter: var(--blur-regular); -webkit-backdrop-filter: var(--blur-regular);
+  border: 1px solid var(--separator); box-shadow: var(--shadow-float);
+}
+.drawer-btn:hover { background: var(--mat-thick); }
+.brand {
+  flex: 0 1 auto; display: flex; align-items: center; gap: var(--sp-3);
+  height: var(--bar); padding: 0 var(--sp-4) 0 var(--sp-3);
+  background: var(--mat-regular); backdrop-filter: var(--blur-regular);
+  -webkit-backdrop-filter: var(--blur-regular);
+  border: 1px solid var(--separator); box-shadow: var(--shadow-float);
+}
+.brand__mark { width: 20px; height: 20px; flex: none; color: var(--tint); }
+.title { margin: 0; font: var(--t-title3) var(--font); letter-spacing: -0.015em; color: var(--label); text-shadow: none; }
+.subtitle {
+  margin: 1px 0 0; font: var(--t-caption) var(--font); letter-spacing: 0.04em;
+  color: var(--label-3); text-transform: none; text-shadow: none;
+}
+.map-edition {
+  display: flex; flex-direction: column; justify-content: center; gap: 1px;
+  height: var(--bar); margin: 0; padding: 0 var(--sp-4);
+  background: var(--mat-regular); backdrop-filter: var(--blur-regular);
+  -webkit-backdrop-filter: var(--blur-regular);
+  border: 1px solid var(--separator); box-shadow: var(--shadow-float);
+  font: var(--t-subhead) var(--font); color: var(--label);
+}
+.map-edition__index { font: var(--t-caption) var(--font); letter-spacing: 0.04em; color: var(--label-3); text-transform: none; }
+.header-actions { display: flex; align-items: center; gap: var(--sp-2); margin-left: auto; }
+.model-link {
+  display: flex; align-items: center; gap: var(--sp-2); height: var(--bar); padding: 0 var(--sp-4);
+  border: 1px solid var(--separator); background: var(--mat-regular);
+  backdrop-filter: var(--blur-regular); -webkit-backdrop-filter: var(--blur-regular);
+  box-shadow: var(--shadow-float); color: var(--label); cursor: pointer;
+  font: var(--t-subhead) var(--font); letter-spacing: 0; text-transform: none;
+}
+.model-link:hover { background: var(--mat-thick); text-decoration: none; }
+.model-link span { font-size: 11px; color: var(--label-3); }
+.mock-label {
+  display: flex; align-items: center; height: var(--bar); padding: 0 var(--sp-3);
+  border: 1px solid rgba(255, 214, 10, 0.4); background: rgba(255, 214, 10, 0.14);
+  backdrop-filter: var(--blur-thin); -webkit-backdrop-filter: var(--blur-thin);
+  color: var(--warn); font: var(--t-subhead) var(--font); letter-spacing: 0; text-transform: none;
+}
+.text-link {
+  color: var(--tint); background: none; border: 0; padding: 0; cursor: pointer;
+  font: var(--t-footnote) var(--font); text-align: left;
+}
+.text-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---------- the desk ---------- */
+.sidebar {
+  top: var(--rail-top); left: var(--inset); bottom: auto; width: var(--rail);
+  max-height: calc(100% - var(--rail-top) - var(--inset) - 52px);
+  padding: 0; gap: 0; overflow-y: auto; overscroll-behavior: contain;
+  animation: rail-in var(--dur-panel) var(--ease-panel);
+}
+@keyframes rail-in { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
+.sidebar > * { padding: var(--sp-3) var(--sp-4); }
+.sidebar > * + * { border-top: 1px solid var(--separator); }
+.workspace-heading { display: flex; flex-direction: column; gap: 2px; padding-top: var(--sp-4); }
+.workspace-heading__label { font: var(--t-title3) var(--font); letter-spacing: -0.015em; color: var(--label); text-transform: none; }
+.workspace-heading__count { font: var(--t-footnote) var(--font); color: var(--label-3); }
+.sidebar__foot { display: flex; flex-direction: column; gap: var(--sp-1); padding-bottom: var(--sp-4); font: var(--t-footnote) var(--font); color: var(--label-3); }
+.section-title { margin-bottom: var(--sp-2); font: var(--t-headline) var(--font); letter-spacing: -0.005em; color: var(--label); text-transform: none; }
+.eyebrow { font: var(--t-caption) var(--font); letter-spacing: 0.04em; color: var(--label-3); text-transform: uppercase; }
+
+/* ---------- controls ---------- */
+.search__input {
+  width: 100%; height: 36px; padding: 0 var(--sp-3); border-radius: var(--r-control);
+  background: var(--fill-3); border: 1px solid transparent; color: var(--label);
+  font: var(--t-body) var(--font);
+  transition: background-color 160ms linear, border-color 160ms linear;
+}
+.search__input::placeholder { color: var(--label-3); opacity: 1; }
+.search__input:focus { background: var(--fill-2); }
+.search__results {
+  top: 42px; padding: var(--sp-1); border-radius: var(--r-card);
+  background: var(--mat-thick); backdrop-filter: var(--blur-thick); -webkit-backdrop-filter: var(--blur-thick);
+  border: 1px solid var(--separator); box-shadow: var(--shadow-card);
+  animation: pop-in var(--dur-pop) var(--ease-pop);
+}
+@keyframes pop-in { from { opacity: 0; transform: translateY(-6px) scale(0.98); } to { opacity: 1; transform: none; } }
+.search__item { min-height: 36px; padding: var(--sp-2); border-radius: var(--r-small); font: var(--t-body) var(--font); }
+.search__item.is-active, .search__item:hover { background: var(--fill-3); }
+.search__bin { font: var(--t-footnote) var(--mono); color: var(--label-3); }
+.search__empty { padding: var(--sp-2); font: var(--t-callout) var(--font); color: var(--label-2); }
+
+.controls { gap: var(--sp-3); }
+.toggle { flex-direction: row-reverse; justify-content: space-between; min-height: 32px; gap: var(--sp-3); }
+.toggle__text { flex: 1; gap: 1px; }
+.toggle__label { font: var(--t-body) var(--font); color: var(--label); }
+.toggle__hint { font: var(--t-footnote) var(--font); color: var(--label-3); }
+/* The iOS switch: a travelling thumb, not a colour swap. */
+.toggle__track {
+  width: 40px; height: 24px; border-radius: var(--r-pill);
+  background: var(--fill-2); border: 1px solid transparent;
+  transition: background-color var(--dur-press) var(--ease-press);
+}
+.toggle__thumb {
+  top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.35);
+  transition: transform var(--dur-press) var(--ease-press);
+}
+.toggle input:checked + .toggle__track { background: var(--tint); border-color: transparent; }
+.toggle input:checked + .toggle__track .toggle__thumb { transform: translateX(16px); background: #fff; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.35); }
+.toggle input:focus-visible + .toggle__track { outline: 2px solid var(--tint); outline-offset: 3px; }
+
+.controls__buttons { gap: var(--sp-2); margin-top: var(--sp-1); }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
+  height: var(--bar); padding: 0 var(--sp-4); border-radius: var(--r-control);
+  background: var(--fill-3); border: 1px solid transparent; color: var(--label);
+  font: var(--t-headline) var(--font); letter-spacing: 0; text-transform: none;
+}
+.btn:hover:not(:disabled) { background: var(--fill-2); border-color: transparent; color: var(--label); }
+.btn--primary { background: var(--tint); border-color: transparent; color: #04210c; }
+.btn--primary:hover:not(:disabled) { background: #3ade66; border-color: transparent; color: #04210c; box-shadow: none; }
+.btn--small { height: 32px; padding: 0 var(--sp-3); font: var(--t-subhead) var(--font); }
+.icon-btn { width: 30px; height: 30px; border-radius: var(--r-small); color: var(--label-2); }
+.icon-btn:hover { background: var(--fill-3); color: var(--label); }
+.info-btn { border-color: var(--label-3); color: var(--label-2); }
+.info-btn:hover, .info-btn:focus-visible { border-color: var(--tint); color: var(--tint); }
+
+/* ---------- legend: only the chrome is restyled, never the ramp ---------- */
+.legend__rows { display: grid; grid-template-columns: 1fr 1fr; gap: 2px var(--sp-3); }
+.legend__rows > li:last-child { grid-column: 1 / -1; }
+.legend__row { padding: var(--sp-1) var(--sp-2); grid-template-columns: 10px 1fr auto; gap: 0 var(--sp-2); line-height: 1.3; }
+.legend__row--btn { min-height: 38px; border-radius: var(--r-small); margin-left: calc(var(--sp-2) * -1); }
+.legend__row--btn:hover { background: var(--fill-4); }
+.legend__name { font: var(--t-body) var(--font); }
+.legend__range { grid-column: 2 / -1; grid-row: 2; font: var(--t-caption) var(--mono); color: var(--label-3); }
+.legend__count { grid-column: 3; grid-row: 1; font: var(--t-footnote) var(--mono); color: var(--label-2); }
+.legend__row--muted { display: flex; gap: var(--sp-2); padding-top: var(--sp-2); }
+.legend__unit { font: var(--t-footnote) var(--font); color: var(--label-3); }
+.legend__hint { margin-top: var(--sp-2); font: var(--t-footnote) var(--font); color: var(--label-3); }
+/* The colour is the datum; the shape should not add meaning. No glow, no outline. */
+.swatch { width: 10px; height: 10px; border-radius: 3px; box-shadow: none; }
+.swatch--sm { width: 7px; height: 7px; border-radius: 2px; }
+.swatch--hollow { border: 1px solid var(--label-3); }
+
+/* ---------- shortlist ---------- */
+.shortlist { gap: var(--sp-2); }
+.shortlist .toplist { max-height: 196px; }
+.capacity { font: var(--t-footnote) var(--font); color: var(--label-2); }
+.capacity strong { color: var(--label); font-family: var(--mono); }
+.capacity input { height: 20px; margin: var(--sp-1) 0; accent-color: var(--tint); }
+.checkbox { font: var(--t-footnote) var(--font); color: var(--label-2); min-height: 28px; }
+.checkbox input { accent-color: var(--tint); }
+.toplist { gap: 1px; }
+.toplist__item {
+  min-height: 38px; padding: var(--sp-2); border: 0; border-radius: var(--r-small);
+  grid-template-columns: 20px 7px 1fr auto; gap: var(--sp-2); font: var(--t-body) var(--font);
+}
+.toplist__item:hover { background: var(--fill-4); }
+.toplist__item.is-active { background: var(--tint-quiet); border: 0; }
+.toplist__rank, .toplist__score { font: var(--t-footnote) var(--mono); color: var(--label-3); }
+.toplist__addr { font: var(--t-body) var(--font); }
+
+/* ---------- the record ---------- */
+.building-panel {
+  top: var(--rail-top); right: var(--inset); bottom: auto; width: var(--dock);
+  max-height: calc(100% - var(--rail-top) - var(--inset) - 52px);
+  padding: 0; gap: 0; border-radius: var(--r-card);
+  border-color: var(--separator); box-shadow: var(--shadow-card);
+  animation: card-in var(--dur-panel) var(--ease-panel);
+}
+@keyframes card-in { from { opacity: 0; transform: translateX(20px) scale(0.98); } to { opacity: 1; transform: none; } }
+.building-panel__head { padding: var(--sp-4) var(--sp-4) var(--sp-3); }
+.building-panel__title { margin: var(--sp-2) 0 0; font: var(--t-title2) var(--font); letter-spacing: -0.02em; }
+.building-panel__address { margin: var(--sp-1) 0 0; font: var(--t-callout) var(--font); color: var(--label-2); }
+.building-panel__bin { font: var(--t-footnote) var(--mono); color: var(--label-3); }
+.within-cap { margin-left: var(--sp-2); padding: 2px var(--sp-2); border-radius: var(--r-pill); border: 0; background: var(--tint-quiet); color: var(--tint); font: var(--t-caption) var(--font); }
+.building-panel__body { padding: 0 var(--sp-4) var(--sp-4); gap: var(--sp-5); scrollbar-gutter: stable; }
+.building-panel__body > section + section { padding-top: var(--sp-5); border-top: 1px solid var(--separator); }
+.building-panel__foot { padding: var(--sp-3) var(--sp-4) var(--sp-4); gap: var(--sp-2); border-top: 1px solid var(--separator); }
+
+/* A grabber is the affordance that says a surface can be dragged; it appears only where it can be. */
+.sheet-grabber { display: none; }
+
+/* Segmented control. */
+.tabs {
+  gap: 2px; margin: 0 var(--sp-4) var(--sp-4); padding: 2px; border-radius: var(--r-control);
+  background: var(--fill-4); border: 0;
+}
+.tabs__tab {
+  flex: 1; height: 30px; border-radius: var(--r-small); border: 0; color: var(--label-2);
+  font: var(--t-subhead) var(--font); letter-spacing: 0; text-transform: none;
+}
+.tabs__tab.is-active { background: var(--fill-1); color: var(--label); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.26); }
+.tabs__tab:hover { color: var(--label); }
+
+/* The score reads in the building's own priority colour, carried in on --accent by the panel. */
+.score__value { font: 600 38px/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -0.035em; text-shadow: none; }
+.score__label { max-width: 104px; font: var(--t-caption) var(--font); letter-spacing: 0.04em; }
+.score-meta__conf { font: var(--t-footnote) var(--mono); color: var(--label-2); }
+.priority-chip { padding: 3px var(--sp-2); border-radius: var(--r-pill); font: var(--t-caption) var(--font); letter-spacing: 0.04em; }
+.score-bar { height: 5px; margin: var(--sp-3) 0 var(--sp-2); background: var(--fill-3); border: 0; border-radius: var(--r-pill); }
+.score-bar__fill { border-radius: var(--r-pill); box-shadow: none; }
+.score-bar__range { border-color: var(--label-2); border-radius: var(--r-pill); }
+.score-def { font: var(--t-footnote) var(--font); color: var(--label-3); line-height: 1.5; }
+
+.kv__row, .factors__row { padding: var(--sp-2) 0; border-bottom: 1px solid var(--separator); }
+/* A measure wraps between words but never inside one: "693,945" split across lines is a misread. */
+.kv__row dd, .factors dd { overflow-wrap: normal; font: var(--t-footnote) var(--mono); color: var(--label); }
+.kv dt, .factors dt { min-width: 0; font: var(--t-callout) var(--font); color: var(--label-2); }
+.explanations { gap: var(--sp-2); font: var(--t-body) var(--font); }
+.explanations li::marker { color: var(--tint); font-size: 10px; }
+.contrib__track { background: var(--fill-4); border-radius: var(--r-pill); }
+.contrib__track::after { background: var(--separator-strong); }
+.contrib__bar { border-radius: var(--r-pill); }
+.contrib__num, .contrib__value { font-family: var(--mono); color: var(--label-2); }
+.chart__grid { stroke: rgba(255, 255, 255, 0.07); }
+.chart__zero, .chart__baseline { stroke: var(--separator-strong); }
+.chart__tick { fill: var(--label-3); }
+.timeline { border-left: 1px solid var(--separator); }
+.timeline__date { font-family: var(--mono); color: var(--label-3); }
+.meter { background: var(--fill-3); border: 0; border-radius: var(--r-small); }
+.meter__fill { background: var(--tint-quiet); }
+.missing { color: var(--warn); }
+
+.disclaimer { padding: 0; border: 0; background: transparent; color: var(--label-3); font: var(--t-footnote) var(--font); line-height: 1.5; }
+.geometry-note { margin: 0; font: var(--t-caption) var(--font); line-height: 1.5; color: var(--label-3); }
+.coverage-notice { padding: var(--sp-3); border: 0; border-radius: var(--r-control); background: var(--fill-4); }
+.coverage-notice p { margin: var(--sp-1) 0 0; font: var(--t-callout) var(--font); color: var(--label-2); }
+.landmark-source a { color: var(--tint); font: var(--t-footnote) var(--font); text-underline-offset: 3px; }
+.notice {
+  padding: var(--sp-2) var(--sp-3); border: 0; border-radius: var(--r-control);
+  background: rgba(255, 214, 10, 0.12); color: var(--warn); font: var(--t-callout) var(--font); line-height: 1.5;
+}
+.chips { gap: var(--sp-2); }
+.chip {
+  min-height: 28px; padding: var(--sp-1) var(--sp-3); border-radius: var(--r-pill);
+  background: var(--fill-4); border: 1px solid transparent; color: var(--label-2); font: var(--t-footnote) var(--font);
+}
+.chip:hover { background: var(--fill-3); color: var(--label); }
+.chip.is-active { background: var(--tint-quiet); border-color: transparent; color: var(--tint); }
+.chip .mono { color: inherit; opacity: 0.7; }
+.record-tag, .status-tag { border-radius: var(--r-pill); font: var(--t-caption) var(--font); letter-spacing: 0.03em; }
+.status-select { font: var(--t-callout) var(--font); color: var(--label-2); }
+.status-select select {
+  height: 32px; padding: 0 var(--sp-2); border-radius: var(--r-small); border: 1px solid transparent;
+  background: var(--fill-3); color: var(--label); font: var(--t-callout) var(--font);
+}
+.status-tag--assigned { background: rgba(10, 132, 255, 0.2); color: #8fc2ff; }
+.status-tag--inspected { background: var(--tint-quiet); color: var(--tint); }
+.status-tag--deferred { background: var(--fill-3); color: var(--label-2); }
+
+.live-rescore { border-top: 0; padding-top: 0; }
+.live-rescore__head { align-items: center; }
+.live-rescore__head .section-title { margin: 0; }
+
+/* ---------- status bar ---------- */
+/*
+ * The measured readouts, including the inference pair. It floats clear of the window edge like the
+ * rest of the chrome rather than filling the bottom of the screen.
+ */
+.statusbar {
+  position: absolute; left: var(--inset); bottom: var(--inset); z-index: 20;
+  display: flex; align-items: stretch; max-width: calc(100% - var(--inset) * 2 - 60px);
+  height: 36px; border-radius: var(--r-control); overflow: hidden;
+  font: var(--t-footnote) var(--font);
+}
+.statusbar__group { display: flex; align-items: stretch; min-width: 0; }
+.statusbar__group + .statusbar__group { border-left: 1px solid var(--separator); }
+/* Readouts never compress: a squeezed measure is a misread one. The bar sheds them in order. */
+.readout { flex: none; display: flex; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-3); white-space: nowrap; }
+.readout + .readout { border-left: 1px solid var(--separator); }
+.readout__label { color: var(--label-3); }
+.readout__value { color: var(--label); font: var(--t-footnote) var(--mono); font-variant-numeric: tabular-nums; }
+.readout--accent .readout__value { color: var(--tint); }
+
+/* ---------- map chrome ---------- */
+.maplibregl-ctrl-group {
+  border-radius: var(--r-control) !important; overflow: hidden;
+  background: var(--mat-regular) !important; box-shadow: var(--shadow-float) !important;
+}
+.maplibregl-ctrl-group button { width: var(--bar); height: var(--bar); }
+.maplibregl-ctrl-group button + button { border-top-color: var(--separator) !important; }
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(0.9); }
+/* The status bar owns the bottom strip, so the map's own chrome stacks above it. */
+.maplibregl-ctrl-bottom-right { bottom: calc(var(--inset) + 36px); }
+.maplibregl-ctrl-attrib {
+  border-radius: var(--r-pill) !important; background: var(--mat-thin) !important;
+  backdrop-filter: var(--blur-thin); -webkit-backdrop-filter: var(--blur-thin); color: var(--label-3);
+}
+.maplibregl-ctrl-attrib a { color: var(--label-2) !important; }
+.deck-tooltip {
+  padding: var(--sp-2) var(--sp-3) !important; border-radius: var(--r-control);
+  background: var(--mat-thick) !important; backdrop-filter: var(--blur-thick);
+  -webkit-backdrop-filter: var(--blur-thick); box-shadow: var(--shadow-float);
+}
+.tt-rank { margin-bottom: 2px; font: var(--t-caption) var(--font); letter-spacing: 0.03em; color: var(--tint); }
+.tt-addr { font: var(--t-headline) var(--font); color: var(--label); }
+.tt-address { margin-top: 1px; font: var(--t-footnote) var(--font); color: var(--label-3); }
+
+.movement-legend {
+  top: var(--rail-top); left: var(--inset); width: 258px; padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-card); animation: pop-in var(--dur-pop) var(--ease-pop);
+}
+.app--sidebar .movement-legend { left: calc(var(--inset) + var(--rail) + var(--sp-2)); }
+.movement-legend__what { font: var(--t-callout) var(--font); color: var(--label-2); }
+.movement-legend__bar { height: 8px; border-radius: var(--r-pill); }
+.movement-legend__ticks { font: var(--t-caption) var(--mono); color: var(--label-3); }
+.mini-badge { border-radius: var(--r-pill); background: var(--warn); color: #241e00; font-family: var(--font); }
+
+.sidebar, .building-panel__body, .toplist, .search__results { scrollbar-width: thin; scrollbar-color: var(--fill-2) transparent; }
+.app--demo .sidebar { opacity: 0.9; }
+
+.demo-strip {
+  left: 50%; right: auto; transform: translateX(-50%); bottom: calc(var(--inset) + 48px);
+  width: min(540px, calc(100% - var(--inset) * 2)); padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-card); border: 1px solid var(--separator);
+  background: var(--mat-thick); backdrop-filter: var(--blur-thick); -webkit-backdrop-filter: var(--blur-thick);
+  box-shadow: var(--shadow-card); animation: demo-in var(--dur-panel) var(--ease-panel);
+}
+@keyframes demo-in { from { opacity: 0; transform: translate(-50%, 14px); } to { opacity: 1; transform: translateX(-50%); } }
+.demo-strip__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--tint); box-shadow: none; animation: none; }
+.demo-strip__label { font: var(--t-caption) var(--font); letter-spacing: 0.04em; color: var(--label-3); }
+.demo-strip__stage { font: var(--t-headline) var(--font); color: var(--label); letter-spacing: -0.005em; }
+.demo-strip__time { font: var(--t-footnote) var(--mono); color: var(--label-3); }
+.demo-strip__stop {
+  min-height: 28px; padding: var(--sp-1) var(--sp-3); border-radius: var(--r-pill);
+  border: 0; background: var(--fill-3); color: var(--label-2); font: var(--t-footnote) var(--font);
+}
+.demo-strip__stop:hover { background: var(--fill-2); color: var(--label); }
+.demo-strip__track { height: 3px; border-radius: var(--r-pill); background: var(--fill-4); }
+.demo-strip__fill { width: 100%; background: var(--tint); transform-origin: left; animation: demo-progress linear forwards; }
+@keyframes demo-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* ---------- model card ---------- */
+.modal {
+  border-radius: var(--r-sheet); border: 1px solid var(--separator);
+  background: var(--mat-thick); backdrop-filter: var(--blur-thick); -webkit-backdrop-filter: var(--blur-thick);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55); animation: modal-in var(--dur-panel) var(--ease-panel);
+}
+@keyframes modal-in { from { opacity: 0; transform: scale(0.96) translateY(10px); } to { opacity: 1; transform: none; } }
+.modal::backdrop { background: rgba(0, 0, 0, 0.42); backdrop-filter: blur(6px); }
+.modal__inner { padding: var(--sp-5); gap: var(--sp-5); }
+.modal__title { margin: var(--sp-1) 0 var(--sp-2); font: var(--t-title1) var(--font); letter-spacing: -0.025em; }
+.modal .kv { font: var(--t-callout) var(--font); }
+.provenance-url { max-width: 300px; font: var(--t-caption) var(--mono); }
+.bullets { color: var(--label-2); font: var(--t-body) var(--font); line-height: 1.5; }
+
+.splash { background: #000; }
+.splash .title { font: var(--t-large-title) var(--font); letter-spacing: -0.025em; }
+.error-text { color: #ff6961; font: var(--t-footnote) var(--mono); }
+.toast {
+  top: calc(var(--inset) + var(--bar) + var(--sp-2)); border-radius: var(--r-control);
+  border: 1px solid rgba(255, 214, 10, 0.4); background: var(--mat-thick);
+  backdrop-filter: var(--blur-thick); -webkit-backdrop-filter: var(--blur-thick);
+  color: var(--warn); box-shadow: var(--shadow-card); font: var(--t-callout) var(--font);
+}
+
+/* ---------- touch ---------- */
+/* On a touch pointer there is no hover to disambiguate a small target, so nothing stays small. */
+@media (pointer: coarse) {
+  .toplist__item, .legend__row--btn, .search__item, .chip, .checkbox { min-height: 44px; }
+  .tabs__tab { height: 38px; }
+  .icon-btn { width: 36px; height: 36px; }
+}
+
+/*
+ * The bar sheds readouts rather than crushing them, least load-bearing first: the platform name,
+ * then the scene instruments. The inference pair and the counts are the last to go.
+ */
+@media (max-width: 1320px) { .readout--drop { display: none; } }
+@media (max-width: 1180px) { .statusbar__group--scene { display: none; } }
+
+@media (max-width: 1100px) {
+  :root { --rail: 300px; --dock: 352px; }
+  /* The desk closes when a building opens (see App.tsx), so the legend takes its place. */
+  .app--panel .movement-legend { display: none; }
+}
+
+@media (max-width: 760px) {
+  /* How much of the window the record sheet claims. Everything that must stay visible sits above it. */
+  :root { --inset: 8px; --sheet-max: 68%; }
+  .map-edition { display: none; }
+  .model-link span, .subtitle { display: none; }
+  .model-link { padding: 0 var(--sp-3); }
+  .sidebar {
+    top: var(--rail-top); left: var(--inset); right: var(--inset); width: auto;
+    max-height: calc(100% - var(--rail-top) - var(--inset) - 48px); z-index: 15;
+  }
+  /*
+   * The record becomes a bottom sheet: anchored to the bottom edge, square where it meets it, and
+   * draggable by the grabber. useDragSheet writes transform on this element, so nothing else may.
+   */
+  .building-panel {
+    top: auto; bottom: 0; left: 0; right: 0; width: auto; max-height: var(--sheet-max);
+    border-radius: var(--r-sheet) var(--r-sheet) 0 0; border-bottom: 0;
+    background: var(--mat-thick); backdrop-filter: var(--blur-thick); -webkit-backdrop-filter: var(--blur-thick);
+    box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.5);
+    animation: sheet-up var(--dur-sheet) var(--ease-sheet);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @keyframes sheet-up { from { transform: translate3d(0, 100%, 0); } to { transform: none; } }
+  .sheet-grabber {
+    display: flex; align-items: center; justify-content: center; flex: none;
+    height: 26px; padding: 0; border: 0; background: none; cursor: grab; touch-action: none;
+  }
+  .sheet-grabber:active { cursor: grabbing; }
+  .sheet-grabber::before { content: ''; width: 36px; height: 5px; border-radius: var(--r-pill); background: var(--fill-1); }
+  .building-panel__head { padding-top: var(--sp-1); }
+  .app--panel .statusbar, .app--panel .movement-legend { display: none; }
+  .movement-legend, .app--sidebar .movement-legend { top: auto; bottom: calc(var(--inset) + 48px); left: var(--inset); width: 232px; }
+  .demo-strip { bottom: calc(var(--inset) + 48px); }
+  .app--panel .demo-strip { bottom: calc(var(--sheet-max) + var(--sp-2)); }
+  /* Attribution has to stay legible, so it climbs above the sheet rather than hiding behind it. */
+  .app--panel .maplibregl-ctrl-bottom-right { bottom: calc(var(--sheet-max) + var(--sp-2)); }
+  .statusbar { max-width: calc(100% - var(--inset) * 2); overflow-x: auto; scrollbar-width: none; }
+}
+
+@media (max-width: 380px) {
+  .brand__mark { display: none; }
+  .statusbar__group--end .readout:not(.readout--accent) { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar, .building-panel, .demo-strip, .modal, .movement-legend, .search__results { animation: none; }
+  .demo-strip__fill { animation: none; transform: scaleX(1); }
+  .btn, .icon-btn, .chip, .tabs__tab, .toplist__item, .legend__row--btn, .search__item,
+  .model-link, .drawer-btn, .toggle__thumb, .toggle__track { transition: none; }
+  .btn:active, .icon-btn:active, .chip:active, .toplist__item:active,
+  .legend__row--btn:active, .search__item:active, .tabs__tab:active, .drawer-btn:active { transform: none; }
+}

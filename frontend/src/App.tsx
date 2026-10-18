@@ -22,6 +22,7 @@ import { INITIAL_CAMERA, prefersReducedMotion } from './camera';
 import { formatDate } from './data/formatDate';
 import { API_BASE } from './config';
 import { displayHeight } from './data/landmarks';
+import { useMediaQuery } from './motion/useMediaQuery';
 import {
   PRIORITIES,
   type BuildingFeature,
@@ -44,9 +45,15 @@ type LoadState =
 const NARROW_QUERY = '(max-width: 1100px)';
 const isNarrow = () => typeof window !== 'undefined' && window.matchMedia?.(NARROW_QUERY).matches === true;
 
-/** Below this width the chassis stops docking and the rail and record overlay the map (chassis.css). */
-const OVERLAY_QUERY = '(max-width: 760px)';
-const isOverlay = () => typeof window !== 'undefined' && window.matchMedia?.(OVERLAY_QUERY).matches === true;
+/** Below this width the record becomes a draggable bottom sheet rather than a side card (glass.css). */
+const SHEET_QUERY = '(max-width: 760px)';
+const isSheet = () => typeof window !== 'undefined' && window.matchMedia?.(SHEET_QUERY).matches === true;
+
+/** Panel widths are defined in glass.css and change at breakpoints; read them rather than restating them. */
+function cssPx(name: string, fallback: number) {
+  const value = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  return Number.isFinite(value) ? value : fallback;
+}
 
 /** A fetched footprint for a building outside the demo area, shaped like a scene feature. */
 function toJoined(f: BuildingFeature): JoinedFeature {
@@ -117,6 +124,14 @@ export default function App() {
     return top ? { bin: top.properties.bin, center: featureCentroid(top), height_m: top.properties.height_m } : null;
   }, [join]);
 
+  /**
+   * The panels float over the map, so the camera has to frame the building into whatever strip of
+   * window they leave uncovered. Reading the live open state keeps the building centred in what the
+   * user can actually see rather than in the window.
+   */
+  const framing = useRef({ sidebar: false });
+  framing.current.sidebar = sidebarOpen;
+
   const getActions = useCallback(() => {
     const map = mapRef.current?.getMap();
     if (!map) return null;
@@ -124,7 +139,15 @@ export default function App() {
       setPanelOpen(v);
       if (v && isNarrow()) setSidebarOpen(false);
     };
-    return { map, target: demoTarget, setShowRisk, setShowMovement, setSelectedBin, setPanelOpen: openPanel };
+    return {
+      map,
+      target: demoTarget,
+      deskOpen: () => framing.current.sidebar,
+      setShowRisk,
+      setShowMovement,
+      setSelectedBin,
+      setPanelOpen: openPanel,
+    };
   }, [demoTarget]);
   const demo = useDemoRunner(getActions);
 
@@ -151,15 +174,20 @@ export default function App() {
   const flyTo = useCallback((center: [number, number], height = 0) => {
     const map = mapRef.current?.getMap();
     if (!map) return;
+    const inset = cssPx('--inset', 12);
+    const gutter = inset + 16;
     map.flyTo({
       center,
       zoom: height > 300 ? 15.05 : height > 120 ? 15.7 : Math.max(map.getZoom(), 16.2),
       pitch: height > 300 ? 52 : 60,
-      // The docked chassis already excludes the rail and the record from the viewport, so padding
-      // only has to leave headroom for a tall building. Overlaid, the record covers the lower 62%.
-      padding: isOverlay()
-        ? { top: height > 300 ? 120 : 32, bottom: Math.round(window.innerHeight * 0.62), left: 16, right: 16 }
-        : { top: height > 300 ? 170 : 40, bottom: 40, left: 28, right: 28 },
+      padding: isSheet()
+        ? { top: height > 300 ? 130 : 72, bottom: Math.round(window.innerHeight * 0.68), left: gutter, right: gutter }
+        : {
+            top: height > 300 ? 190 : 80,
+            bottom: 80,
+            left: framing.current.sidebar ? inset + cssPx('--rail', 322) + 16 : gutter,
+            right: inset + cssPx('--dock', 384) + 16,
+          },
       duration: prefersReducedMotion() ? 0 : 2200,
     });
   }, []);
@@ -182,6 +210,13 @@ export default function App() {
     [demo, featureByBin, flyTo],
   );
   const lookup = useCallback((target: LookupTarget) => select(target.bin, true, target), [select]);
+
+  // Narrowing the window stacks the desk over the record, since neither leaves room for the other
+  // below 1100px. Whichever the user opened last wins, and that is always the record.
+  const narrow = useMediaQuery(NARROW_QUERY);
+  useEffect(() => {
+    if (narrow && panelOpen && selectedBin) setSidebarOpen(false);
+  }, [narrow, panelOpen, selectedBin]);
 
   /** Selected building without a priority colour: an unscored scene footprint or a fetched external one. */
   const highlight = useMemo(() => {

@@ -20,7 +20,7 @@ export interface StatusStripProps {
   movementOn: boolean;
 }
 
-/** `drop` marks a readout the strip may shed first when it runs out of width (see chassis.css). */
+/** `drop` marks a readout the bar may shed first when it runs out of width (see glass.css). */
 function Readout({ label, value, title, drop, accent }: {
   label: string;
   value: string;
@@ -36,20 +36,20 @@ function Readout({ label, value, title, drop, accent }: {
   );
 }
 
-/** Docked instrument strip: what is on screen, where it came from, and what it cost to compute. */
+/** Floating status bar: what is on screen, where it came from, and what it cost to compute. */
 export function StatusStrip({ scored, mapped, dataAsOf, platform, isMock, selectedBin, movementOn }: StatusStripProps) {
   const sun = useMemo(() => sunState(new Date(), INITIAL_VIEW.latitude, INITIAL_VIEW.longitude), []);
   const saved = 1 - INFERENCE_MS.nnpa / INFERENCE_MS.cpu;
 
   return (
-    <footer className="statusstrip" aria-label="Session readouts">
-      <div className="statusstrip__group">
+    <footer className="statusbar" aria-label="Session readouts">
+      <div className="statusbar__group">
         <Readout label="Scored" value={`${scored.toLocaleString()} / ${mapped.toLocaleString()}`} title="Buildings with a model score, out of footprints rendered in the demo area" />
         <Readout label="As of" value={formatDate(dataAsOf)} title="Latest city record included in the scored data" />
         <Readout label="Selection" value={selectedBin ?? '—'} title="Building Identification Number of the selected footprint" />
       </div>
 
-      <div className="statusstrip__group statusstrip__group--scene">
+      <div className="statusbar__group statusbar__group--scene">
         <Readout
           label="Sun"
           value={`${sun.azimuthDeg.toFixed(0)}°az ${sun.altitudeDeg.toFixed(0)}°alt`}
@@ -58,7 +58,7 @@ export function StatusStrip({ scored, mapped, dataAsOf, platform, isMock, select
         <Readout label="Movement" value={movementOn ? 'On' : 'Off'} title="Satellite line-of-sight motion layer" />
       </div>
 
-      <div className="statusstrip__group statusstrip__group--end">
+      <div className="statusbar__group statusbar__group--end">
         <Readout
           label="Per score"
           value={`${INFERENCE_MS.nnpa.toFixed(3)} ms NNPA · ${INFERENCE_MS.cpu.toFixed(3)} ms CPU`}

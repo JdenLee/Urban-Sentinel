@@ -17,19 +17,11 @@ import { pickedBuilding } from '../layers/landmarkLayer';
 export const BASEMAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
 
 /**
- * The map is an inset viewport in the chassis, not a full-bleed backdrop. The frame publishes its
- * insets as CSS variables so the rail and docks reserve real space rather than floating over the city.
+ * The map fills the window and the panels float above it. That is what gives the translucent
+ * surfaces something to sample: a panel docked beside the map would have only page behind it.
+ * Camera framing compensates for the overlap through flyTo padding instead (see App.tsx).
  */
-const VIEWPORT: React.CSSProperties = {
-  position: 'absolute',
-  top: 'var(--chassis-top, 0px)',
-  left: 'var(--chassis-left, 0px)',
-  right: 'var(--chassis-right, 0px)',
-  bottom: 'var(--chassis-bottom, 0px)',
-  // react-map-gl's container defaults to width/height 100%, which would win over right and bottom.
-  width: 'auto',
-  height: 'auto',
-};
+const VIEWPORT: React.CSSProperties = { position: 'absolute', inset: 0 };
 
 /** Dark background-only style used if the basemap cannot be fetched; the scored overlay still renders. */
 const FALLBACK_STYLE: StyleSpecification = {

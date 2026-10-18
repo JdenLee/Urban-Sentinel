@@ -12,6 +12,7 @@ import {
 } from '../data/shortlist';
 import { searchAddresses, type AddressMatch } from '../data/geosearch';
 import { buildingName, searchLandmarks } from '../data/landmarks';
+import { usePress } from '../motion/usePress';
 
 export interface ShortlistProps {
   scored: JoinedFeature[];
@@ -55,6 +56,60 @@ function useAddressSearch(query: string): AddressSearch {
     };
   }, [query]);
   return state;
+}
+
+/**
+ * Pointer-down activation lives in a child component because a hook cannot be called inside the
+ * `map` that renders the rows. Both of these start a camera flight, which is where the saved press
+ * duration is actually visible: the map is already moving as the finger lifts.
+ */
+function SearchResult({ item, active, onHover, onChoose }: {
+  item: SearchItem;
+  active: boolean;
+  onHover: () => void;
+  onChoose: (item: SearchItem) => void;
+}) {
+  const press = usePress<HTMLButtonElement>(() => onChoose(item));
+  const scoredFeature = (item.kind === 'scored' || item.kind === 'landmark') && item.feature.properties.prediction;
+  return (
+    <button
+      type="button"
+      className={`search__item${active ? ' is-active' : ''}`}
+      onMouseEnter={onHover}
+      {...press}
+    >
+      {scoredFeature ? (
+        <span className="swatch swatch--sm" style={{ background: rgbCss(PRIORITY_COLOR[scoredFeature.priority]) }} />
+      ) : (
+        <span className="swatch swatch--sm swatch--hollow" aria-hidden />
+      )}
+      <span className="search__addr">{item.label}</span>
+      <span className="search__bin mono">{item.kind === 'bin' ? '' : item.bin}</span>
+    </button>
+  );
+}
+
+function ShortlistRow({ feature, selected, status, onSelect }: {
+  feature: JoinedFeature;
+  selected: boolean;
+  status: AssignmentStatus;
+  onSelect: (bin: string) => void;
+}) {
+  const { bin, address, prediction } = feature.properties;
+  const p = prediction!;
+  const press = usePress<HTMLButtonElement>(() => onSelect(bin));
+  return (
+    <button type="button" className={`toplist__item${selected ? ' is-active' : ''}`} {...press}>
+      <span className="toplist__rank mono">{p.rank}</span>
+      <span className="swatch swatch--sm" style={{ background: rgbCss(PRIORITY_COLOR[p.priority]) }} />
+      <span className="toplist__addr">{buildingName(bin, address)}</span>
+      {status !== 'unassigned' ? (
+        <span className={`status-tag status-tag--${status}`}>{ASSIGNMENT_LABEL[status]}</span>
+      ) : (
+        <span className="toplist__score mono">{p.score.toFixed(2)}</span>
+      )}
+    </button>
+  );
 }
 
 export interface SearchBoxProps {
@@ -112,23 +167,7 @@ export function SearchBox({ scored, features = scored, onSelect, onLookup }: Sea
           {results.length === 0 && <li className="search__empty">{empty}</li>}
           {results.map((item, i) => (
             <li key={`${item.kind}-${item.bin}`} role="option" aria-selected={i === active}>
-              <button
-                type="button"
-                className={`search__item${i === active ? ' is-active' : ''}`}
-                onMouseEnter={() => setActive(i)}
-                onClick={() => choose(item)}
-              >
-                {(item.kind === 'scored' || item.kind === 'landmark') && item.feature.properties.prediction ? (
-                  <span
-                    className="swatch swatch--sm"
-                    style={{ background: rgbCss(PRIORITY_COLOR[item.feature.properties.prediction!.priority]) }}
-                  />
-                ) : (
-                  <span className="swatch swatch--sm swatch--hollow" aria-hidden />
-                )}
-                <span className="search__addr">{item.label}</span>
-                <span className="search__bin mono">{item.kind === 'bin' ? '' : item.bin}</span>
-              </button>
+              <SearchResult item={item} active={i === active} onHover={() => setActive(i)} onChoose={choose} />
             </li>
           ))}
           {results.length > 0 && addresses.status === 'loading' && (
@@ -172,28 +211,16 @@ export function Shortlist(props: ShortlistProps) {
         Colour only the shortlist on the map
       </label>
       <ol className="toplist">
-        {rows.map((f) => {
-          const p = f.properties.prediction!;
-          const st = status(f.properties.bin);
-          return (
-            <li key={f.properties.bin}>
-              <button
-                type="button"
-                className={`toplist__item${selectedBin === f.properties.bin ? ' is-active' : ''}`}
-                onClick={() => onSelect(f.properties.bin)}
-              >
-                <span className="toplist__rank mono">{p.rank}</span>
-                <span className="swatch swatch--sm" style={{ background: rgbCss(PRIORITY_COLOR[p.priority]) }} />
-                <span className="toplist__addr">{buildingName(f.properties.bin, f.properties.address)}</span>
-                {st !== 'unassigned' ? (
-                  <span className={`status-tag status-tag--${st}`}>{ASSIGNMENT_LABEL[st]}</span>
-                ) : (
-                  <span className="toplist__score mono">{p.score.toFixed(2)}</span>
-                )}
-              </button>
-            </li>
-          );
-        })}
+        {rows.map((f) => (
+          <li key={f.properties.bin}>
+            <ShortlistRow
+              feature={f}
+              selected={selectedBin === f.properties.bin}
+              status={status(f.properties.bin)}
+              onSelect={onSelect}
+            />
+          </li>
+        ))}
       </ol>
       <button
         type="button"

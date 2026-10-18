@@ -1,7 +1,32 @@
 import type { JoinedFeature, Priority } from '../types/predictions';
 import { PRIORITY_COLOR, PRIORITY_LABEL, PRIORITY_RANGE, UNSCORED_COLOR, rgbCss } from '../data/priority';
+import { usePress } from '../motion/usePress';
 
 const ORDER: Priority[] = ['critical', 'high', 'medium', 'low'];
+
+/** A row is a map filter, so it fires on pointer-down: the fill changes under the finger. */
+function LegendRow({ priority, on, count, onToggle }: {
+  priority: Priority;
+  on: boolean;
+  count: number;
+  onToggle: (p: Priority) => void;
+}) {
+  const press = usePress<HTMLButtonElement>(() => onToggle(priority));
+  return (
+    <button
+      type="button"
+      className={`legend__row legend__row--btn${on ? '' : ' is-off'}`}
+      aria-pressed={on}
+      title={on ? `Hide ${PRIORITY_LABEL[priority]} on the map` : `Show ${PRIORITY_LABEL[priority]} on the map`}
+      {...press}
+    >
+      <span className="swatch" style={{ background: rgbCss(PRIORITY_COLOR[priority]) }} />
+      <span className="legend__name">{PRIORITY_LABEL[priority]}</span>
+      <span className="legend__range mono">{PRIORITY_RANGE[priority]}</span>
+      <span className="legend__count mono">{count}</span>
+    </button>
+  );
+}
 
 export interface RiskLegendProps {
   scored: JoinedFeature[];
@@ -27,25 +52,11 @@ export function RiskLegend({ scored, visible, scoreLabel, onToggle }: RiskLegend
         <span className="legend__unit">{scoreLabel}</span>
       </div>
       <ul className="legend__rows">
-        {ORDER.map((key) => {
-          const on = visible.has(key);
-          return (
-            <li key={key}>
-              <button
-                type="button"
-                className={`legend__row legend__row--btn${on ? '' : ' is-off'}`}
-                aria-pressed={on}
-                title={on ? `Hide ${PRIORITY_LABEL[key]} on the map` : `Show ${PRIORITY_LABEL[key]} on the map`}
-                onClick={() => onToggle(key)}
-              >
-                <span className="swatch" style={{ background: rgbCss(PRIORITY_COLOR[key]) }} />
-                <span className="legend__name">{PRIORITY_LABEL[key]}</span>
-                <span className="legend__range mono">{PRIORITY_RANGE[key]}</span>
-                <span className="legend__count mono">{counts[key]}</span>
-              </button>
-            </li>
-          );
-        })}
+        {ORDER.map((key) => (
+          <li key={key}>
+            <LegendRow priority={key} on={visible.has(key)} count={counts[key]} onToggle={onToggle} />
+          </li>
+        ))}
         <li className="legend__row legend__row--muted">
           <span className="swatch" style={{ background: rgbCss(UNSCORED_COLOR) }} />
           <span className="legend__name">Unscored</span>
