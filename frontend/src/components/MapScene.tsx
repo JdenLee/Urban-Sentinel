@@ -14,6 +14,13 @@ import { CinematicOverlay } from './CinematicOverlay';
 import { buildingName, landmarkFor } from '../data/landmarks';
 import { pickedBuilding } from '../layers/landmarkLayer';
 import { useMediaQuery } from '../motion/useMediaQuery';
+import { BuildingOrbit } from '../motion/BuildingOrbit';
+import { SceneEntrance, ENTRANCE_VIEW } from '../motion/SceneEntrance';
+import { pinOffset } from '../motion/sceneMotion';
+import { prefersReducedMotion } from '../camera';
+import type { DemoOpeningPhase } from '../data/demoScript';
+
+const finishDemoRise = () => {};
 
 export const BASEMAP_STYLE_URL = (import.meta.env.VITE_BASEMAP_STYLE_URL as string | undefined) || 'https://tiles.openfreemap.org/styles/positron';
 
@@ -70,6 +77,11 @@ export interface MapSceneProps {
   onBasemapError: (message: string) => void;
   cameraMode: 'orbit' | 'pan';
   flat: boolean;
+  autoOrbit: boolean;
+  demoRunning: boolean;
+  demoOpeningPhase: DemoOpeningPhase;
+  demoRunId: number;
+  demoPaused: boolean;
 }
 
 export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
@@ -89,12 +101,67 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
     onBasemapError,
     cameraMode,
     flat,
+    autoOrbit,
+    demoRunning,
+    demoOpeningPhase,
+    demoRunId,
+    demoPaused,
   },
   ref,
 ) {
   const dragged = useRef(false);
   const touch = useMediaQuery('(pointer: coarse)');
   const mapStyle = useBasemapStyle(onBasemapError);
+  const [ready, setReady] = useState(false);
+  const [entrance, setEntrance] = useState(() => !prefersReducedMotion());
+  const [entranceRevealed, setEntranceRevealed] = useState(false);
+  const [pinMoving, setPinMoving] = useState(false);
+  const rise = useRef({ scale: entrance ? .001 : 1, offset: 0 });
+  const pin = useRef({ scale: 1, offset: 0 });
+  const pinElapsed = useRef(0);
+  const initialView = useRef(entrance ? ENTRANCE_VIEW : INITIAL_VIEW);
+  const finishEntrance = useCallback(() => { setEntrance(false); }, []);
+  const revealEntrance = useCallback(() => { setEntranceRevealed(true); }, []);
+  const demoRising = demoRunning && demoOpeningPhase === 'rise';
+  const startupActive = entrance && !demoRunning;
+  const grayOpening = (startupActive && !entranceRevealed) || (demoRunning && (demoOpeningPhase === 'rise' || demoOpeningPhase === 'approach'));
+  const interact = useCallback(() => { finishEntrance(); onUserInteract(); }, [finishEntrance, onUserInteract]);
+  useEffect(() => { if (selectedBin || flat || demoRunning) finishEntrance(); }, [selectedBin, flat, demoRunning, finishEntrance]);
+  useEffect(() => {
+    pinElapsed.current = 0;
+    pin.current.offset = 0;
+  }, [selectedBin]);
+  useEffect(() => {
+    let frame = 0, last = performance.now();
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+    const tick = (now: number) => {
+      // Use active time, so backgrounding or the official-records pause cannot jump the bob.
+      pinElapsed.current += Math.max(0, Math.min(100, now - last));
+      last = now;
+      pin.current.offset = pinOffset(pinElapsed.current);
+      frame = requestAnimationFrame(tick);
+    };
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      const disabled = !selectedBin || flat || reduced.matches;
+      const moving = !disabled && !demoPaused && !document.hidden;
+      if (disabled) pin.current.offset = 0;
+      setPinMoving(moving);
+      if (moving) {
+        last = performance.now();
+        pin.current.offset = pinOffset(pinElapsed.current);
+        frame = requestAnimationFrame(tick);
+      }
+    };
+    schedule();
+    reduced.addEventListener('change', schedule);
+    document.addEventListener('visibilitychange', schedule);
+    return () => {
+      cancelAnimationFrame(frame);
+      reduced.removeEventListener('change', schedule);
+      document.removeEventListener('visibilitychange', schedule);
+    };
+  }, [selectedBin, flat, demoPaused]);
   const context = useMemo(() => join.features.filter((f) => !f.properties.prediction), [join]);
   const points = useMemo(
     () => externalMovement ?? movementPoints(join.features, dataMode),
@@ -126,15 +193,17 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
         context,
         scored: join.scored,
         showRisk,
+        grayOpening,
         selectedBin,
         visiblePriorities,
         capacityCutoff,
-        pulse: 0.4,
+        rise: rise.current,
+        pin: pin.current,
         sun,
         highlight,
       }),
     ],
-    [points, showMovement, hexRadius, context, join.scored, showRisk, selectedBin, visiblePriorities, capacityCutoff, sun, highlight],
+    [points, showMovement, hexRadius, context, join.scored, showRisk, grayOpening, selectedBin, visiblePriorities, capacityCutoff, sun, highlight],
   );
 
   const onClick = useCallback(
@@ -165,7 +234,8 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
   return (
     <Map
       ref={ref}
-      initialViewState={INITIAL_VIEW}
+      initialViewState={initialView.current}
+      onLoad={() => setReady(true)}
       mapStyle={mapStyle}
       maxPitch={75}
       minZoom={10}
@@ -176,14 +246,19 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
       touchPitch={!flat}
       onPitch={(e) => { if (flat && e.viewState.pitch !== 0) e.target.setPitch(0); }}
       onError={(e) => onBasemapError(e.error?.message ?? 'Basemap failed to load')}
-      onMouseDown={onUserInteract}
-      onTouchStart={onUserInteract}
-      onWheel={onUserInteract}
+      onMouseDown={interact}
+      onTouchStart={interact}
+      onWheel={interact}
       style={VIEWPORT}
     >
       <NavigationControl position="bottom-right" visualizePitch />
+      <SceneEntrance key={demoRunning ? `demo-${demoRunId}` : 'startup'} ready={ready}
+        active={startupActive || demoRising} sweepCamera={!demoRunning} transform={rise.current}
+        onReveal={revealEntrance}
+        onFinish={demoRunning ? finishDemoRise : finishEntrance} />
       <OrbitInteraction enabled={!flat && cameraMode === 'orbit' && !touch} dragged={dragged} />
-      <CinematicOverlay interleaved layers={layers} effects={effects} onClick={onClick} getTooltip={getTooltip} />
+      <BuildingOrbit enabled={autoOrbit && !flat} subject={selectedBin} />
+      <CinematicOverlay interleaved _animate={startupActive || demoRising || pinMoving} layers={layers} effects={effects} onClick={onClick} getTooltip={getTooltip} />
     </Map>
   );
 });

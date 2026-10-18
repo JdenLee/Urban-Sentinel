@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Geometry } from 'geojson';
-import { fetchBuildingFacts, type BuildingFacts } from '../data/buildingFacts';
+import { buildingUse, fetchBuildingFacts, type BuildingFacts, type BuildingUse } from '../data/buildingFacts';
 import { aerialView, fetchCommonsPhoto, geometryCenter, streetViewImageUrl, streetViewUrl, type CommonsPhoto } from '../data/buildingImagery';
 import { GOOGLE_MAPS_KEY } from '../config';
 import type { Landmark } from '../data/landmarks';
@@ -62,10 +62,11 @@ export interface BuildingProfileProps {
   landmark?: Landmark;
   /** Floors already known from the scene's footprint data, shown while the live facts load. */
   knownFloors?: number | null;
+  demoImage?: 'aerial' | 'street';
 }
 
 /** Aerial photo with the footprint outline, or the landmark's photo, plus the building's facts. */
-export function BuildingProfile({ bin, geometry, heightM, landmark, knownFloors }: BuildingProfileProps) {
+export function BuildingProfile({ bin, geometry, heightM, landmark, knownFloors, demoImage }: BuildingProfileProps) {
   const facts = useBuildingFacts(bin);
   const photo = useLandmarkPhoto(landmark?.photo);
   const aerial = useMemo(() => aerialView(geometry, heightM), [geometry, heightM]);
@@ -73,6 +74,7 @@ export function BuildingProfile({ bin, geometry, heightM, landmark, knownFloors 
   const street = center ? streetViewUrl(center[0], center[1]) : null;
   const streetImage = center ? streetViewImageUrl(center[0], center[1], heightM, GOOGLE_MAPS_KEY) : null;
   const [failed, setFailed] = useState<ReadonlySet<SlideId>>(new Set());
+  useEffect(() => setFailed(new Set()), [bin]);
   const fail = useCallback((id: SlideId) => setFailed((prev) => new Set(prev).add(id)), []);
 
   // Fixed order: aerial (always available, exact footprint), then Street View, then a landmark's photo.
@@ -96,6 +98,9 @@ export function BuildingProfile({ bin, geometry, heightM, landmark, knownFloors 
       body: <PhotoSlide src={streetImage} alt="Street View of the building" street onFail={() => fail('street')} />,
       credit: <span title="Google Street View, nearest panorama, facing the building">Street View · © Google</span>,
     });
+  } else if (street) {
+    slides.push({ id: 'street', label: 'Street View', expandable: false, body: <StreetLink url={street} />,
+      credit: <span>Google Street View · opens in Google Maps</span> });
   }
   if (photo.status === 'ready') {
     const p = photo.photo;
@@ -111,15 +116,18 @@ export function BuildingProfile({ bin, geometry, heightM, landmark, knownFloors 
       ),
     });
   }
-  const visible = slides.filter((sl) => !failed.has(sl.id));
+  const visible = slides.filter((sl) => !failed.has(sl.id) || (sl.id === 'street' && street)).map((sl) =>
+    sl.id === 'street' && failed.has(sl.id) && street ? { ...sl, expandable: false, body: <StreetLink url={street} unavailable />,
+      credit: <span>Street View image unavailable · open Google Maps</span> } : sl);
 
   return (
     <section className="profile" aria-label="About this building">
       {visible.length > 0 ? (
-        <Carousel slides={visible} street={street} />
+        <Carousel slides={visible} street={street} demoImage={demoImage} />
       ) : (
-        photo.status === 'loading' && <div className="profile__frame profile__frame--loading" aria-hidden />
+        <div className="profile__frame profile__frame--empty">{photo.status === 'loading' ? 'Loading building images…' : 'Building imagery is unavailable right now.'}</div>
       )}
+      {!visible.length && street && <a className="profile__street" href={street} target="_blank" rel="noopener noreferrer">Open Street View ↗</a>}
       <Facts state={facts} knownFloors={knownFloors ?? null} />
     </section>
   );
@@ -127,6 +135,7 @@ export function BuildingProfile({ bin, geometry, heightM, landmark, knownFloors 
 
 type SlideId = 'photo' | 'street' | 'aerial';
 interface Slide {
+  expandable?: boolean;
   id: SlideId;
   label: string;
   body: ReactNode;
@@ -137,11 +146,17 @@ interface Slide {
  * Horizontal scroll-snap strip: swipe, trackpad, arrow keys, the chevrons or the dots all move it,
  * and the index is read back from the scroll position so every input agrees.
  */
-function Carousel({ slides, street }: { slides: Slide[]; street: string | null }) {
+function Carousel({ slides, street, demoImage }: { slides: Slide[]; street: string | null; demoImage?: 'aerial' | 'street' }) {
   const strip = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
+  const [expanded, setExpanded] = useState(false);
+  const dialog = useRef<HTMLDialogElement>(null);
   const current = Math.min(index, slides.length - 1);
   const many = slides.length > 1;
+  useEffect(() => {
+    if (expanded) dialog.current?.showModal();
+    else dialog.current?.close();
+  }, [expanded]);
 
   const go = useCallback(
     (i: number) => {
@@ -153,6 +168,18 @@ function Carousel({ slides, street }: { slides: Slide[]; street: string | null }
     },
     [slides.length],
   );
+  const slideIds = slides.map((s) => s.id).join(',');
+  useEffect(() => {
+    // Hidden off-screen slide links should not be keyboard or screen-reader stops.
+    Array.from(strip.current?.children ?? []).forEach((child, i) => {
+      (child as HTMLElement).inert = i !== current;
+    });
+  }, [current, slideIds]);
+  useEffect(() => {
+    if (!demoImage) return;
+    const target = slideIds.split(',').indexOf(demoImage);
+    if (target >= 0) go(target);
+  }, [demoImage, slideIds, go]);
 
   // A slide that fails to load is removed; keep the strip aligned to the slide still being shown.
   useEffect(() => {
@@ -160,7 +187,7 @@ function Carousel({ slides, street }: { slides: Slide[]; street: string | null }
   }, [index, slides.length, go]);
 
   return (
-    <figure className="profile__media">
+    <figure className="profile__media" data-demo="photos">
       <div
         className="carousel"
         role="region"
@@ -185,6 +212,7 @@ function Carousel({ slides, street }: { slides: Slide[]; street: string | null }
           {slides.map((sl, i) => (
             <div key={sl.id} className="carousel__slide" role="group" aria-roledescription="slide" aria-label={`${i + 1} of ${slides.length}: ${sl.label}`}>
               {sl.body}
+              {sl.expandable !== false && <button type="button" className="carousel__expand" tabIndex={i === current ? 0 : -1} aria-label={`Enlarge ${sl.label.toLowerCase()} image`} onClick={() => setExpanded(true)}><span aria-hidden>↗</span></button>}
             </div>
           ))}
         </div>
@@ -213,8 +241,33 @@ function Carousel({ slides, street }: { slides: Slide[]; street: string | null }
           </a>
         )}
       </figcaption>
+      <dialog ref={dialog} className="image-viewer" aria-label="Enlarged building images"
+        onCancel={() => setExpanded(false)} onClose={() => setExpanded(false)}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === 'ArrowRight') { e.preventDefault(); go(current + 1); }
+          if (e.key === 'ArrowLeft') { e.preventDefault(); go(current - 1); }
+        }} onClick={(e) => { if (e.target === e.currentTarget) setExpanded(false); }}>
+        <header><h3>{slides[current]?.label} · Building image</h3><button type="button" className="icon-btn" aria-label="Close image viewer" onClick={() => setExpanded(false)}>×</button></header>
+        {expanded && slides[current]?.body}
+        <div className="image-viewer__controls">
+          <button type="button" className="btn" disabled={current === 0} onClick={() => go(current - 1)}>← Previous</button>
+          <span>{current + 1} / {slides.length}</span>
+          <button type="button" className="btn" disabled={current === slides.length - 1} onClick={() => go(current + 1)}>Next →</button>
+        </div>
+        <div className="profile__credit">{slides[current]?.credit}{street && <a href={street} target="_blank" rel="noopener noreferrer">Open Street View ↗</a>}</div>
+      </dialog>
     </figure>
   );
+}
+
+function StreetLink({ url, unavailable = false }: { url: string; unavailable?: boolean }) {
+  return <div className="profile__frame profile__street-fallback">
+    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden><path d="M3 21V8l6-3v16m0-19h7v19m0-12h5v12M1 21h22M12 5v2m0 3v2m0 3v2M5 10v2m0 3v2m13-5v2m0 3v2" /></svg>
+    <strong>See it from the street</strong>
+    <span>{unavailable ? 'The embedded panorama could not load.' : 'Embedded imagery needs a configured Google Maps key.'}</span>
+    <a href={url} target="_blank" rel="noopener noreferrer">Open Google Street View ↗</a>
+  </div>;
 }
 
 function PhotoSlide({ src, alt, street, onFail }: { src: string; alt: string; street?: boolean; onFail: () => void }) {
@@ -260,16 +313,19 @@ function Facts({ state, knownFloors }: { state: FactsState; knownFloors: number 
   const f = state.status === 'ready' ? state.facts : null;
   const multi = (f?.buildingsOnLot ?? 1) > 1;
   const floors = f?.floors ?? knownFloors;
-  const units = f ? (f.unitsResidential && f.unitsResidential > 0 ? f.unitsResidential : f.unitsTotal) : null;
-  const unitLabel = f && f.unitsResidential && f.unitsResidential > 0 ? 'Homes' : 'Units';
+  const units = f?.unitsTotal ?? null;
+  const use = f ? buildingUse(f) : null;
 
   return (
-    <div className="profile__facts">
+    <div className="profile__facts" data-demo="facts">
+      {f && use && <div className="building-use"><UseIcon use={use} /><div><strong>{use === 'Other' ? (f.buildingClassLabel ?? f.landUse ?? 'Use not recorded') : use}</strong>
+        <span>{f.buildingClassLabel ?? f.landUse ?? 'NYC MapPLUTO'}{f.buildingClass ? ` · ${f.buildingClass}` : ''}</span></div></div>}
       <dl className="profile__stats">
         <Stat label={multi ? 'Floors (tallest)' : 'Floors'} value={floors ? int.format(floors) : null} />
-        <Stat label={multi ? `${unitLabel} on lot` : unitLabel} value={units !== null && units > 0 ? int.format(units) : f ? '0' : null} />
+        <Stat label={multi ? 'Total units on lot' : 'Total units'} value={units !== null && units >= 0 ? int.format(units) : null} />
         <Stat label={multi ? 'Floor area, lot' : 'Floor area'} value={f?.buildingAreaSqft ? `${compact.format(f.buildingAreaSqft)} ft²` : null} />
       </dl>
+      {f?.unitsResidential !== null && f?.unitsResidential !== undefined && f.unitsResidential > 0 && <p className="profile__note">{int.format(f.unitsResidential)} residential units{multi ? ' across the tax lot' : ''} · NYC MapPLUTO</p>}
 
       {state.status === 'loading' && <p className="profile__note">Loading building facts…</p>}
       {state.status === 'error' && <p className="profile__note">Building facts could not be loaded right now.</p>}
@@ -305,6 +361,16 @@ function Facts({ state, knownFloors }: { state: FactsState; knownFloors: number 
       )}
     </div>
   );
+}
+
+function UseIcon({ use }: { use: BuildingUse }) {
+  const path = use === 'Utility' ? 'M13 2 5 13h6l-1 9 9-13h-7z'
+    : use === 'Residential' || use === 'Mixed use' ? 'M3 11 12 3l9 8M5 10v11h5v-7h4v7h5V10'
+    : use === 'Commercial' ? 'M5 21V3h14v18M9 7h1m4 0h1M9 11h1m4 0h1M9 15h1m4 0h1M10 21v-3h4v3'
+    : use === 'Industrial' ? 'M3 21V9l6 4V9l6 4V3h4l2 18ZM7 17h1m4 0h1m4 0h1'
+    : use === 'Transportation' ? 'M5 16V6q0-3 7-3t7 3v10H5ZM5 10h14M8 20l-3 2m11-2 3 2M8 14h1m6 0h1'
+    : 'M3 9h18L12 3ZM5 11v8m7-8v8m7-8v8M3 21h18';
+  return <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={path} /></svg>;
 }
 
 function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {

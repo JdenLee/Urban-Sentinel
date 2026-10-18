@@ -15,6 +15,8 @@ Open http://127.0.0.1:5173/. The committed LinuxONE prediction snapshot keeps th
 
 Validation: `npm run build`, `npm test`.
 
+The follow-up presentation update preserves PR #19's image carousel, makes photos/facts visible, adds click-to-enlarge, a pauseable building orbit and a 40-second guided tour. See [PRESENTATION.md](PRESENTATION.md) for recording instructions, actual live-service requirements and updated verification.
+
 ## Interaction and interpretation
 
 - Desktop: left-drag in Orbit mode rotates/tilts; Pan mode moves the map. Scroll zooms. 2D, 3D, North, and Reset are explicit controls. Touch pointers retain native pan/zoom/rotate.
@@ -51,7 +53,7 @@ VITE_BASEMAP_STYLE_URL=http://127.0.0.1:9/missing-style.json npm run dev -- --ho
 
 ## Security follow-up
 
-`npm audit --omit=dev` reports the existing MapLibre sanitizer advisory [GHSA-jrc7-96c5-q579](https://github.com/advisories/GHSA-jrc7-96c5-q579), rated critical. The reported fix requires a MapLibre major-version upgrade; it was not silently bundled into the visual redesign. Review/upgrade the mapping dependency before public deployment. The complete audit also reports existing development-dependency findings.
+The integration pass upgraded Vitest to 4.1, resolving the test-tool dependency findings. The existing MapLibre sanitizer advisory [GHSA-jrc7-96c5-q579](https://github.com/advisories/GHSA-jrc7-96c5-q579) remains. A trial major-version upgrade exposed an incompatibility with the current 3D overlay and was reverted to keep this integration minimal. Upgrade the map/overlay pair together before public deployment.
 
 ## Explicit follow-ups
 

@@ -73,7 +73,7 @@ def run() -> dict:
     t0 = time.time()
     ctx = Context.load()
     fac = ctx.fac
-    report: dict = {"run": evidence.fingerprint(), "label": "UNSAFE at first Initial FISP filing of the target cycle",
+    report: dict = {"run": evidence.fingerprint(), "label": "UNSAFE among Initial FISP filings of the target cycle (worst recorded status per building)",
                     "feature_set": ["facade", *DEPLOYED_PARTS]}
 
     # ---- Primary test: decision at the start of cycle 9, outcome = cycle-9 filing ----------------------

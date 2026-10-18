@@ -1,4 +1,6 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { DemoCue } from '../data/demoScript';
+import { prefersReducedMotion } from '../camera';
 import type {
   BuildingHistory,
   BuildingPrediction,
@@ -22,6 +24,7 @@ import { useDragSheet } from '../motion/useDragSheet';
 import { useMediaQuery } from '../motion/useMediaQuery';
 import { usePress } from '../motion/usePress';
 import { HistoryReplay } from './HistoryReplay';
+import { ProbabilityGauge } from './ProbabilityGauge';
 
 const FACTOR_LABELS: Record<string, { label: string; unit?: string }> = {
   sar_velocity_mm_year: { label: 'LOS velocity', unit: 'mm/yr' },
@@ -89,6 +92,9 @@ export interface BuildingPanelProps {
   feature: JoinedFeature | null;
   /** From the scene's predictions or, for buildings outside it, from the history record. */
   prediction: BuildingPrediction | null;
+  /** Generation timestamp of this prediction's loaded export, not the live inference request. */
+  predictionGeneratedAt?: string | null;
+  predictionIsMock?: boolean;
   history: HistoryState;
   /** Search label to show while the history loads, for buildings without a footprint in the scene. */
   fallbackTitle: string | null;
@@ -107,6 +113,18 @@ export interface BuildingPanelProps {
   /** Roof height in metres for buildings without a scene footprint (from the fetched footprint). */
   geometryHeightM?: number | null;
   onClose: () => void;
+  orbiting?: boolean;
+  orbitAvailable?: boolean;
+  onToggleOrbit?: () => void;
+  demoCue?: DemoCue | null;
+  demoRunId?: number;
+  demoRunning?: boolean;
+  demoAwaitingInference?: boolean;
+  demoAwaitingHistory?: boolean;
+  onDemoHistoryComplete?: () => void;
+  onDemoInferenceStart?: () => void;
+  onDemoInferenceComplete?: () => void;
+  onDemoInterrupt?: () => void;
 }
 
 function eyebrowFor(p: BuildingPrediction | null, history: HistoryState, total: number, scope: 'area' | 'citywide'): string {
@@ -122,7 +140,11 @@ export function BuildingPanel(props: BuildingPanelProps) {
   const color = rgbCss(p ? PRIORITY_COLOR[p.priority] : SELECTED_COLOR);
   const tabs = panelTabs(p !== null);
   const [tab, setTab] = useState<Tab>(tabs[0]);
-  const active = tabs.includes(tab) ? tab : tabs[0];
+  const chosenTab = props.demoCue?.tab ?? tab;
+  const active = tabs.includes(chosenTab) ? chosenTab : tabs[0];
+  const bodyRef = useRef<HTMLDivElement>(null);
+  // Stopping the tour leaves the presenter on the section they were just discussing.
+  useEffect(() => { if (props.demoCue) setTab(props.demoCue.tab); }, [props.demoCue]);
   const data = history.status === 'ready' ? history.data : null;
   const address = feature?.properties.address ?? data?.address ?? p?.address ?? fallbackTitle ?? 'Address unavailable';
   const landmark = landmarkFor(bin);
@@ -139,12 +161,49 @@ export function BuildingPanel(props: BuildingPanelProps) {
       heightM={feature?.properties.height_m ?? props.geometryHeightM ?? 0}
       landmark={landmark}
       knownFloors={feature?.properties.floors ?? null}
+      demoImage={props.demoCue?.image}
     />
   );
   const { sheetRef, grabberProps } = useDragSheet(isSheet, onClose);
+  const interruptDemo = (event: React.SyntheticEvent) => {
+    // This is an intentional presenter action inside the paused tour, not an interruption.
+    if (props.demoAwaitingInference && (event.target as Element).closest('[data-demo-action="run-inference"]')) return;
+    if (props.demoCue) setTab(props.demoCue.tab);
+    props.onDemoInterrupt?.();
+  };
+  useEffect(() => { bodyRef.current?.scrollTo({ top: 0, behavior: 'instant' }); }, [active]);
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body || !props.demoCue) return;
+    // Scope scrolling to this card: never scroll the page or shift the map.
+    let observer: ResizeObserver | undefined;
+    let frame = requestAnimationFrame(() => {
+      const section = props.demoCue ? body.querySelector<HTMLElement>(`[data-demo="${props.demoCue.section}"]`) : null;
+      // Keep the drawing itself visible, not just the condition-summary card above it.
+      const target = props.demoCue?.section === 'history-charts'
+        ? section?.querySelector<HTMLElement>('.condition-chart') ?? section : section;
+      target?.closest('details')?.setAttribute('open', '');
+      const align = () => {
+        const top = target ? target.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop - 8 : 0;
+        body.scrollTo({ top: Math.max(0, top), behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+      };
+      align();
+      // Loading and result cards add height near the bottom of Summary. Realign after
+      // they mount so the presentation doesn't leave the new content below the fold.
+      if (target && props.demoCue?.section === 'inference') {
+        observer = new ResizeObserver(() => {
+          cancelAnimationFrame(frame);
+          frame = requestAnimationFrame(align);
+        });
+        observer.observe(target);
+      }
+    });
+    return () => { observer?.disconnect(); cancelAnimationFrame(frame); body.scrollTo({ top: body.scrollTop, behavior: 'instant' }); };
+  }, [active, props.demoCue]);
 
   return (
-    <aside ref={sheetRef} className="panel building-panel" aria-label="Selected building" style={{ ['--accent' as string]: color }}>
+    <aside ref={sheetRef} className="panel building-panel" aria-label="Selected building" style={{ ['--accent' as string]: color }}
+      onPointerDownCapture={interruptDemo} onWheelCapture={interruptDemo} onKeyDownCapture={interruptDemo}>
       <button type="button" className="sheet-grabber" aria-label="Drag down to close" {...grabberProps} />
       <header className="building-panel__head">
         <div>
@@ -175,6 +234,9 @@ export function BuildingPanel(props: BuildingPanelProps) {
           ×
         </button>
       </header>
+      {props.orbitAvailable && <button type="button" className="orbit-toggle" aria-pressed={props.orbiting} onClick={props.onToggleOrbit}>
+        <span aria-hidden>{props.orbiting ? 'Ⅱ' : '↻'}</span> {props.orbiting ? 'Pause building orbit' : 'Resume building orbit'}
+      </button>}
 
       {tabs.length > 1 && (
         <div className="tabs" role="tablist" aria-label="Building details">
@@ -184,12 +246,14 @@ export function BuildingPanel(props: BuildingPanelProps) {
         </div>
       )}
 
-      <div className="building-panel__body" role="tabpanel" id="building-tab-panel" aria-labelledby={tabs.length > 1 ? `building-tab-${active}` : undefined} aria-label={tabs.length === 1 ? 'Building history' : undefined}>
-        {!p && <details className="detail-fold"><summary>Building photo &amp; facts</summary>{profile}</details>}
+      <div ref={bodyRef} className="building-panel__body" role="tabpanel" id="building-tab-panel" aria-labelledby={tabs.length > 1 ? `building-tab-${active}` : undefined} aria-label={tabs.length === 1 ? 'Building history' : undefined}>
+        {!p && profile}
         {!p && <NoScoreNotice feature={feature} bin={bin} labels={props.coverageLabels} />}
-        {active === 'overview' && p && <OverviewTab {...props} p={p} color={color} profile={profile} />}
-        {active === 'evidence' && p && <EvidenceTab p={p} />}
-        {active === 'history' && <HistoryTab p={p} history={history} color={color} bin={bin} isMock={props.isMock ?? false} />}
+        {p && <div hidden={active !== 'overview'} className="panel-tab-content"><OverviewTab {...props} p={p} color={color} profile={profile} /></div>}
+        {p && <div hidden={active !== 'evidence'} className="panel-tab-content"><EvidenceTab p={p} /></div>}
+        <div hidden={active !== 'history'} className="panel-tab-content"><HistoryTab p={p} history={history} color={color} bin={bin}
+          isMock={props.isMock ?? false} predictionGeneratedAt={props.predictionGeneratedAt} predictionIsMock={props.predictionIsMock ?? props.isMock ?? false}
+          demoCue={props.demoCue} active={active === 'history'} onChartComplete={props.demoAwaitingHistory ? props.onDemoHistoryComplete : undefined} /></div>
         {p && rankScope === 'area' && (
           <details className="detail-fold"><summary>Inspection workflow</summary>
           <label className="status-select">
@@ -216,17 +280,24 @@ export function BuildingPanel(props: BuildingPanelProps) {
   );
 }
 
-function OverviewTab({ p, color, modelCard, onOpenModelCard, profile }: BuildingPanelProps & { p: BuildingPrediction; color: string; profile: ReactNode }) {
+function OverviewTab({ p, color, modelCard, onOpenModelCard, profile, demoRunId, demoRunning, demoAwaitingInference, onDemoInferenceStart, onDemoInferenceComplete }: BuildingPanelProps & { p: BuildingPrediction; color: string; profile: ReactNode }) {
   const scoreIsProbability = p.probability !== null && Math.abs(p.probability - p.score) < 1e-9;
   const consequence = Object.entries(p.consequence);
   return (
     <>
-      <section>
+      <section data-demo="score">
+        {scoreIsProbability ? <>
+          <div className="probability-heading">
+            <span>Predicted probability <button type="button" className="info-btn" onClick={onOpenModelCard} aria-label="What does this score mean?">i</button></span>
+            <span className="priority-chip" style={{ background: color }}>{PRIORITY_LABEL[p.priority]}</span>
+          </div>
+          <ProbabilityGauge probability={p.probability!} />
+        </> : <>
         <div className="score-row">
           <div className="score">
-            <span className="score__value">{scoreIsProbability ? pct(p.probability!) : p.score.toFixed(2)}</span>
+            <span className="score__value">{p.score.toFixed(2)}</span>
             <span className="score__label">
-              {scoreIsProbability ? 'Predicted probability' : 'Priority score'}
+              Priority score
               <button type="button" className="info-btn" onClick={onOpenModelCard} aria-label="What does this score mean?">
                 i
               </button>
@@ -237,12 +308,13 @@ function OverviewTab({ p, color, modelCard, onOpenModelCard, profile }: Building
           </span>
         </div>
         <ScoreBar score={p.score} interval={p.score_interval} />
-        {scoreIsProbability && <div className="probability-scale"><span>0%</span><span>Predicted UNSAFE filing</span><span>100%</span></div>}
+        </>}
         <p className="score-def">
           {scoreIsProbability ? 'Estimated chance of an UNSAFE rating in the next Initial FISP façade filing. Not the chance of collapse.' : 'A relative score for prioritizing field inspection, not a probability of collapse.'}
         </p>
 
       </section>
+      {profile}
 
       {p.explanations.length > 0 && p.contributions.length === 0 && (
         <section>
@@ -290,9 +362,9 @@ function OverviewTab({ p, color, modelCard, onOpenModelCard, profile }: Building
           )}
         </dl>
         </details>
-      <details className="detail-fold"><summary>Building photo &amp; facts</summary>{profile}<p className="muted small">Source footprints and roof heights, where available. Façade textures and landmark geometry are illustrative, not a survey.</p></details>
       <details className="detail-fold"><summary>Run a live prediction · LinuxONE</summary>
-        <LiveRescore bin={p.bin} storedProbability={p.probability} />
+        <LiveRescore bin={p.bin} storedProbability={p.probability} demoRunId={demoRunId} demoActive={demoRunning}
+          demoWaiting={demoAwaitingInference} onDemoStart={onDemoInferenceStart} onDemoComplete={onDemoInferenceComplete} />
       </details>
       {consequence.length > 0 && (
         <details className="detail-fold"><summary>Exposure &amp; consequence inputs</summary>
@@ -315,8 +387,9 @@ function EvidenceTab({ p }: { p: BuildingPrediction }) {
         <p className="muted small">This is an ensemble, not a single decision tree. The available export contains feature contributions, not individual tree paths.</p>
       </section>
       {p.contributions.length > 0 && (
-        <section>
+        <section data-demo="contributions">
           <h3 className="section-title">What raised or lowered the prediction?</h3>
+          <p className="muted small">Contributions for the loaded prediction export; not recomputed by the live-inference button.</p>
           <ContributionBars items={[...p.contributions].sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution)).slice(0, 6)} />
           {p.contributions.length > 6 && <details className="detail-fold"><summary>All exported contributions ({p.contributions.length})</summary><ContributionBars items={p.contributions} /></details>}
         </section>
@@ -555,7 +628,7 @@ function OfficialRecords({ bin }: { bin: string }) {
         {facades && (
           <li>
             <a href={facades} target="_blank" rel="noopener noreferrer">DOB façade filings (BIS) ↗</a>
-            <span className="muted small"> every FISP cycle for this BIN; reports before 2016 in full</span>
+            <span className="muted small"> tax-lot façade listing; match BIN {bin}. Use DOB NOW for newer report details.</span>
           </li>
         )}
         {allFilings && (
@@ -579,7 +652,10 @@ function OfficialRecords({ bin }: { bin: string }) {
   );
 }
 
-function HistoryTab({ p, history, color, bin, isMock }: { p: BuildingPrediction | null; history: HistoryState; color: string; bin: string; isMock: boolean }) {
+function HistoryTab({ p, history, color, bin, isMock, demoCue, active, onChartComplete, predictionGeneratedAt, predictionIsMock }: {
+  p: BuildingPrediction | null; history: HistoryState; color: string; bin: string; isMock: boolean;
+  demoCue?: DemoCue | null; active: boolean; onChartComplete?: () => void; predictionGeneratedAt?: string | null; predictionIsMock: boolean;
+}) {
   const data = history.status === 'ready' ? history.data : null;
   // Without the API, fall back to whatever the prediction file carries (the mock data has records and movement).
   const records = data ? data.records : (p?.record_history ?? []);
@@ -587,7 +663,9 @@ function HistoryTab({ p, history, color, bin, isMock }: { p: BuildingPrediction 
   return (
     <>
       <HistoryNotice history={history} />
-      <HistoryReplay records={records} points={data?.movement?.points ?? p?.movement_history ?? []} isMock={isMock && !data} source={data?.movement?.meta.source ?? null} />
+      <HistoryReplay records={records} points={data?.movement?.points ?? p?.movement_history ?? []} isMock={isMock && !data} source={data?.movement?.meta.source ?? null}
+        prediction={p ? { probability: p.probability, generatedAt: predictionGeneratedAt, isMock: predictionIsMock, color } : null}
+        demoProgress={demoCue?.historyProgress} active={active} onChartComplete={onChartComplete} />
       {data && <FispSummary data={data} />}
       <details className="detail-fold"><summary>Satellite measurement details</summary><MovementSection data={data} p={p} color={color} synthetic={isMock && !data} /></details>
       {(data || records.length > 0) && (
@@ -595,7 +673,7 @@ function HistoryTab({ p, history, color, bin, isMock }: { p: BuildingPrediction 
           <Timeline records={records} bin={bin} />
         </details>
       )}
-      <details className="detail-fold"><summary>Open official NYC records</summary><OfficialRecords bin={bin} /></details>
+      <details className="detail-fold" data-demo="official"><summary>Open official NYC records</summary><OfficialRecords bin={bin} /></details>
       {p && p.completeness !== null && (
         <section>
           <h3 className="section-title">Data completeness</h3>

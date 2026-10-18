@@ -45,7 +45,7 @@ export function LayerControls(props: LayerControlsProps) {
       <div className="controls__buttons">
         <button type="button" className="btn btn--primary" onClick={onPlayDemo} disabled={demoRunning}>
           <svg width="10" height="12" viewBox="0 0 10 12" fill="currentColor" aria-hidden="true"><path d="M1 1l8 5-8 5z" /></svg>
-          {demoRunning ? 'Playing…' : 'Play demo'}
+          {demoRunning ? 'Tour in progress' : 'Start tour'}
         </button>
         <button type="button" className="btn" onClick={onReset}>
           Reset view

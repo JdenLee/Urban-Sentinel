@@ -323,12 +323,12 @@ describe('movement points', () => {
 });
 
 describe('demo timeline', () => {
-  it('is deterministic and fits in 20–30 seconds', () => {
+  it('is deterministic and fits in 41 seconds of active time', () => {
     const a = demoTimeline().map((s) => [s.at, s.stage]);
     const b = demoTimeline().map((s) => [s.at, s.stage]);
     expect(a).toEqual(b);
     expect(DEMO_DURATION_MS).toBeGreaterThanOrEqual(20_000);
-    expect(DEMO_DURATION_MS).toBeLessThanOrEqual(30_000);
+    expect(DEMO_DURATION_MS).toBeLessThanOrEqual(41_000);
     expect(Math.max(...demoTimeline().map((s) => s.at))).toBeLessThan(DEMO_DURATION_MS);
   });
 });

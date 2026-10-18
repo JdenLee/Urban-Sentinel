@@ -4,11 +4,16 @@ import type { JoinedFeature } from '../types/predictions';
 import { landmarkFor } from '../data/landmarks';
 import { oneWtcGeometry, setbackGeometry, type LandmarkFace, type LandmarkLine } from '../data/landmarkGeometry';
 import { SELECTED_COLOR } from '../data/priority';
+import { SCENE_TRANSFORM } from './SceneTransformExtension';
+import { CITY_OPENING_GRAY, CITY_COLOR_FADE_MS, smoothstep, type SceneTransform } from '../motion/sceneMotion';
 
 type RGBA = [number, number, number, number];
 const geometryCache = new WeakMap<JoinedFeature, ReturnType<typeof oneWtcGeometry>>();
 
-export function landmarkLayers(features: JoinedFeature[], selectedBin: string | null, colorFor: (f: JoinedFeature) => RGBA): Layer[] {
+export function landmarkLayers(features: JoinedFeature[], selectedBin: string | null, colorFor: (f: JoinedFeature) => RGBA,
+  rise: SceneTransform = { scale: 1, offset: 0 }, grayOpening = false): Layer[] {
+  const motion = { extensions: [SCENE_TRANSFORM], sceneTransform: rise };
+  const colorTransition = { duration: grayOpening ? 1 : CITY_COLOR_FADE_MS, type: 'interpolation' as const, easing: smoothstep };
   const landmarks = features.filter((f) => landmarkFor(f.properties.bin));
   const layers: Layer[] = [];
   for (const f of landmarks) {
@@ -18,29 +23,37 @@ export function landmarkLayers(features: JoinedFeature[], selectedBin: string | 
     if (!geometry) { geometry = kind === 'one-wtc' ? oneWtcGeometry(f) : setbackGeometry(f, kind); geometryCache.set(f, geometry); }
     const selected = f.properties.bin === selectedBin;
     // A neutral silver-gray landmark is still unscored. Never give it a priority color without a prediction.
-    const base: RGBA = selected ? [...SELECTED_COLOR, 255] : !f.properties.prediction ? kind === 'one-wtc' ? [147, 167, 177, 255] : [199, 190, 167, 255] : colorFor(f);
+    const base: RGBA = grayOpening ? CITY_OPENING_GRAY : selected ? [...SELECTED_COLOR, 255] : !f.properties.prediction ? kind === 'one-wtc' ? [147, 167, 177, 255] : [199, 190, 167, 255] : colorFor(f);
     layers.push(
       new SolidPolygonLayer<LandmarkFace>({
+        ...motion,
         id: `landmark-${f.properties.bin}`, data: geometry.faces, _full3d: true,
         getPolygon: (d) => d.polygon, getFillColor: (d) => {
-          const c = d.crown && !selected && !f.properties.prediction ? [104, 143, 129] : base;
+          const c = d.crown && !grayOpening && !selected && !f.properties.prediction ? [104, 143, 129] : base;
           return [Math.min(255, c[0] * d.shade), Math.min(255, c[1] * d.shade), Math.min(255, c[2] * d.shade), 255];
         },
-        pickable: true, parameters: { cullMode: 'none' }, updateTriggers: { getFillColor: [base.join(',')] },
+        pickable: true, parameters: { cullMode: 'none' }, updateTriggers: { getFillColor: [base.join(','), grayOpening] },
+        transitions: { getFillColor: colorTransition },
       }),
       new PathLayer<LandmarkLine>({
+        ...motion,
         id: `landmark-${f.properties.bin}-glazing`, data: geometry.glazing, getPath: (d) => d.path,
-        getColor: [24, 41, 57, 110], getWidth: 0.28, widthUnits: 'meters', widthMinPixels: 0.25, widthMaxPixels: 0.7,
+        getColor: grayOpening ? [38, 38, 38, 110] : [24, 41, 57, 110], getWidth: 0.28, widthUnits: 'meters', widthMinPixels: 0.25, widthMaxPixels: 0.7,
+        transitions: { getColor: colorTransition },
         pickable: false, getPolygonOffset: () => [-2, -2],
       }),
       new PathLayer<LandmarkLine>({
+        ...motion,
         id: `landmark-${f.properties.bin}-edges`, data: geometry.edges, getPath: (d) => d.path,
-        getColor: selected ? [35, 76, 80, 255] : [140, 153, 151, 155], getWidth: 0.32, widthUnits: 'meters', widthMinPixels: 0.3, widthMaxPixels: 1.1,
+        getColor: grayOpening ? [148, 148, 148, 155] : selected ? [35, 76, 80, 255] : [140, 153, 151, 155], getWidth: 0.32, widthUnits: 'meters', widthMinPixels: 0.3, widthMaxPixels: 1.1,
+        transitions: { getColor: colorTransition },
         pickable: false, getPolygonOffset: () => [-3, -3],
       }),
       new PathLayer<LandmarkLine>({
+        ...motion,
         id: `landmark-${f.properties.bin}-spire`, data: geometry.spire, getPath: (d) => d.path,
-        getColor: [174, 194, 209, 255], getWidth: (_, { index }) => index === 0 ? 2.4 : 0.45, widthUnits: 'meters', widthMinPixels: 0.5,
+        getColor: grayOpening ? CITY_OPENING_GRAY : [174, 194, 209, 255], getWidth: (_, { index }) => index === 0 ? 2.4 : 0.45, widthUnits: 'meters', widthMinPixels: 0.5,
+        transitions: { getColor: colorTransition },
         pickable: false,
       }),
     );

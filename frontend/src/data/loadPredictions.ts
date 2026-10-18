@@ -76,7 +76,8 @@ export function parseRecords(raw: unknown): RecordEvent[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter(isObj)
-    .map((r) => ({ date: str(r.date), type: str(r.type) ?? 'Record', description: str(r.description) ?? '' }))
+    .map((r) => ({ date: str(r.date), type: str(r.type) ?? 'Record', description: str(r.description) ?? '',
+      status: str(r.status), cycle: num(r.cycle), reference: str(r.reference) }))
     .filter((r) => r.description || r.date)
     .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
 }
@@ -173,6 +174,7 @@ function parseMlServiceRecord(r: Json): Candidate | string {
       .map((h) => ({
         date: str(h.filed_on),
         type: ML_STATUS_TYPE,
+        status: str(h.status),
         description: `Cycle ${num(h.cycle) ?? '?'}: ${str(h.status) ?? 'unknown'}`,
         cycle: num(h.cycle),
         reference: str(h.reference),

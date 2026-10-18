@@ -42,7 +42,9 @@ Datathon, and the predictions are meant to run on IBM LinuxONE.
 - **Satellite movement layer:** 60 m hexagons with **their own legend and a separate purple palette**, so they can't
   be confused with the priority colours. The legend shows units, period, source, and the 30 m posting it is
   aggregated from.
-- **Play Demo:** a fixed, interruptible 30-second sequence.
+- **Start tour:** 41 seconds of active tour time. Live inference starts automatically at 19 seconds, shows loading and the real result, then continues without a click. Use **Skip live step** to bypass it, or **Finish tour** after the later official-records pause. Gray buildings rise first; priority colors fade in while the camera zooms. Selection color and the gently bouncing pin appear only when the close-up arrives. The tour continues with aerial → Street View, loading-to-result live inference, explanations and animated history. See [PRESENTATION.md](PRESENTATION.md) and [LinuxONE connection checks](LINUXONE_LIVE.md).
+- **Building images and facts:** the merged aerial/Street View/photo carousel is preserved. Click an image to enlarge it; floors, total units, floor area and an icon-labeled building use are visible without expanding a details section. Multi-building tax lots are labeled explicitly.
+- **Building orbit:** selection gently rotates around the building after the fly-in. Pause/Resume is available; manual camera input, 2D and reduced-motion preferences stop/disable rotation.
 
 **Full product roadmap (not built; needs backend data first)**
 - A 2016–present displacement timeline with a time slider
@@ -167,21 +169,28 @@ The satellite layer uses `factors.sar_velocity_mm_year`. In mock mode, unscored 
 deterministic background value. Real data never gets synthetic points, and the toggle is disabled if no velocities
 are supplied.
 
-## Demo Mode timeline
+## Guided tour timeline
 
-Every run is identical (`src/components/DemoController.tsx`). Before it starts, it clears any category or shortlist
-filters.
+The script is fixed (`src/data/demoScript.ts`, `src/components/DemoController.tsx`), but live network results are not fabricated or guaranteed. Before starting, it clears category/shortlist filters and closes the controls drawer. It uses 707 FDR Drive if that exact address has a score; otherwise it uses the highest-ranked available building. The current export's top building is **709 F D R DRIVE**, BIN **1078054**.
 
 | Time | Shot |
 | --- | --- |
-| 0–5 s | Reset layers, start high over the harbour, fly into Lower Manhattan |
-| 5–10 s | Inspection-priority layer on: buildings fade from gray to category colours |
-| 10–17 s | Fly to the #1-ranked building; selection beacon |
-| 17–24 s | Building panel opens (Overview tab) while the camera orbits |
-| 24–30 s | Satellite-movement layer and its legend appear; overview shot |
+| 0–2.3 s | Buildings rise in gray |
+| 2.3–6 s | City approach; colours fade in at 3.2–5.4 s while the camera moves |
+| 6–11 s | Fly to the priority building; select and drop the pin only after arrival |
+| 11–19 s | Probability, aerial → Street View, building facts |
+| 19 s: automatic inference | Starts Run on LinuxONE automatically; loading then real result/error, followed by automatic continuation. Skip live step goes straight to explanations and cancels any pending request. |
+| 19–26 s | Discuss the actual returned engine/platform/timing |
+| 26–30 s | Why this score? Signed contribution chart from the loaded export |
+| 30–33 s | Replay actual dated history |
+| 33 s: automatic wait | Draw recorded dots and lines, then reveal the loaded model probability in a shaded next-filing area; dashed history lines bridge unrated filings without inventing observations |
+| 33–35.5 s | Read the completed history → prediction chart before scrolling on |
+| 35.5–37 s | Open official NYC record links in the card (no external tab navigation) |
+| 37 s: pause | Explore official records; click Finish tour to continue |
+| 37–41 s | Final overview |
 
 Recording tips: use a 1440×900 or 1920×1080 window, and let the page sit for a few seconds so tiles are cached.
-Clicking, dragging or scrolling the map, or pressing `Esc`, stops the sequence.
+Map interaction, Stop, Escape or backgrounding an actively playing tour cancels future cues. Panel interaction stops playback except the awaited Run click or exploration during the official-records pause. Live inference has a 6.5-second demo request deadline and a 1.8-second minimum presentation reveal; it does not change reported server timing or saved explanation charts. See [PRESENTATION.md](PRESENTATION.md) for the LinuxONE tunnel and recording checklist.
 
 ## Building data preparation
 

@@ -17,12 +17,11 @@ export function AppHeader({ sidebarOpen, isMock, onToggleSidebar, onOpenModel }:
         </svg>
       </button>
       <div className="brand">
-        {/* A setback skyscraper with lit windows and a beacon on its spire. */}
-        <svg className="brand__mark" viewBox="0 0 34 34" fill="none" aria-hidden="true">
-          <path d="M8 33V24H10V15H12V8H14.5V5H19.5V8H22V15H24V24H26V33Z" fill="currentColor" />
-          <path d="M10.2 25.6h1.6v1.6h-1.6zM13.2 25.6h1.6v1.6h-1.6zM16.2 25.6h1.6v1.6h-1.6zM19.2 25.6h1.6v1.6h-1.6zM22.2 25.6h1.6v1.6h-1.6zM10.2 28.4h1.6v1.6h-1.6zM13.2 28.4h1.6v1.6h-1.6zM16.2 28.4h1.6v1.6h-1.6zM19.2 28.4h1.6v1.6h-1.6zM22.2 28.4h1.6v1.6h-1.6zM11.7 16.6h1.6v1.6h-1.6zM14.7 16.6h1.6v1.6h-1.6zM17.7 16.6h1.6v1.6h-1.6zM20.7 16.6h1.6v1.6h-1.6zM11.7 19.4h1.6v1.6h-1.6zM14.7 19.4h1.6v1.6h-1.6zM17.7 19.4h1.6v1.6h-1.6zM20.7 19.4h1.6v1.6h-1.6zM14.7 9.6h1.6v1.6h-1.6zM17.7 9.6h1.6v1.6h-1.6zM14.7 12.4h1.6v1.6h-1.6zM17.7 12.4h1.6v1.6h-1.6zM15.5 33v-3.4h3V33z" fill="var(--mat-opaque)" />
-          <path d="M17 5V2.4" stroke="currentColor" strokeWidth="1.2" />
-          <circle className="brand__beacon" cx="17" cy="1.8" r="1.4" fill="currentColor" />
+        {/* A crisp Empire State-inspired silhouette: setbacks, vertical ribs and a tall spire. */}
+        <svg className="brand__mark" viewBox="0 0 28 42" fill="none" aria-hidden="true">
+          <path d="M3 41V28h4V17h3V10h3V6h2v4h3v7h3v11h4v13Z" fill="currentColor" />
+          <path d="M14 1v7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <path d="M11 20v18m6-18v18M14 13v25M6 31v7m16-7v7" stroke="var(--mat-opaque)" strokeWidth="1.1" />
         </svg>
         <div>
           <h1 className="title">Urban Sentinel</h1>

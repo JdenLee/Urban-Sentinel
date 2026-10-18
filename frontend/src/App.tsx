@@ -23,6 +23,8 @@ import { formatDate } from './data/formatDate';
 import { API_BASE } from './config';
 import { displayHeight } from './data/landmarks';
 import { useMediaQuery } from './motion/useMediaQuery';
+import { chooseDemoBuilding } from './data/demoScript';
+import { fetchBuildingFacts } from './data/buildingFacts';
 import {
   PRIORITIES,
   type BuildingFeature,
@@ -85,6 +87,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [cameraMode, setCameraMode] = useState<'orbit' | 'pan'>('orbit');
   const [flat, setFlat] = useState(false);
+  const [orbiting, setOrbiting] = useState(false);
   const flatRef = useRef(flat);
   flatRef.current = flat;
   const [modelCardOpen, setModelCardOpen] = useState(false);
@@ -124,7 +127,7 @@ export default function App() {
   const predictions = load.status === 'ready' ? load.predictions : null;
 
   const demoTarget = useMemo<DemoTarget | null>(() => {
-    const top = join?.scored[0];
+    const top = chooseDemoBuilding(join?.scored ?? []);
     return top ? { bin: top.properties.bin, center: featureCentroid(top), height_m: top.properties.height_m } : null;
   }, [join]);
 
@@ -141,6 +144,7 @@ export default function App() {
     if (!map) return null;
     const openPanel = (v: boolean) => {
       setPanelOpen(v);
+      setOrbiting(v);
       if (v && isNarrow()) setSidebarOpen(false);
     };
     return {
@@ -154,6 +158,7 @@ export default function App() {
     };
   }, [demoTarget]);
   const demo = useDemoRunner(getActions);
+  const interruptMotion = useCallback(() => { demo.stop(); setOrbiting(false); }, [demo.stop]);
 
   const startDemo = useCallback(() => {
     // The demo tells the full story, so clear any filters first.
@@ -161,14 +166,20 @@ export default function App() {
     setShortlistOnly(false);
     setModelCardOpen(false);
     setFlat(false);
+    flatRef.current = false;
+    setSidebarOpen(false);
+    framing.current.sidebar = false;
+    setOrbiting(false);
+    if (demoTarget) void fetchBuildingFacts(demoTarget.bin).catch(() => {});
     demo.start();
-  }, [demo]);
+  }, [demo, demoTarget]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || modelCardOpen) return;
+      if (e.key !== 'Escape' || modelCardOpen || e.defaultPrevented) return;
       if (demo.running) demo.stop();
       else setPanelOpen(false);
+      setOrbiting(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -181,9 +192,10 @@ export default function App() {
     if (!map) return;
     const inset = cssPx('--inset', 12);
     const gutter = inset + 16;
+    const zoom = height > 300 ? 15.05 : height > 120 ? 15.7 : Math.max(map.getZoom(), 16.2);
     map.flyTo({
       center,
-      zoom: height > 300 ? 15.05 : height > 120 ? 15.7 : Math.max(map.getZoom(), 16.2),
+      zoom: zoom - (isSheet() ? (height > 120 ? 1.1 : 0.65) : 0),
       pitch: flatRef.current ? 0 : height > 300 ? 52 : 60,
       padding: isSheet()
         ? { top: height > 300 ? 130 : 72, bottom: Math.round(window.innerHeight * 0.68), left: gutter, right: gutter }
@@ -201,6 +213,7 @@ export default function App() {
   const select = useCallback(
     (bin: string | null, fly = false, target?: LookupTarget) => {
       demo.stop();
+      setOrbiting(bin !== null && !flatRef.current && !prefersReducedMotion());
       setSelectedBin(bin);
       setPanelOpen(bin !== null);
       setLookupLabel(target?.label ?? null);
@@ -284,6 +297,7 @@ export default function App() {
     setPanelOpen(false);
     setSelectedBin(null);
     setFlat(false);
+    setOrbiting(false);
     mapRef.current?.getMap().flyTo({
       ...INITIAL_CAMERA,
       padding: { top: 0, bottom: 0, left: 0, right: 0 },
@@ -352,7 +366,10 @@ export default function App() {
     : predictions.movement;
 
   return (
-    <div className={`app${demo.running ? ' app--demo' : ''}${sidebarOpen ? ' app--sidebar' : ''}${panelOpen && selectedBin ? ' app--panel' : ''}`}>
+    <div className={`app${demo.running ? ' app--demo' : ''}${sidebarOpen ? ' app--sidebar' : ''}${panelOpen && selectedBin ? ' app--panel' : ''}`}
+      onPointerDownCapture={(event) => {
+        if ((event.target as Element).closest('.maplibregl-ctrl-group')) interruptMotion();
+      }}>
       <MapScene
         ref={mapRef}
         join={join}
@@ -365,11 +382,16 @@ export default function App() {
         hexRadius={predictions.movement.aggregation_m}
         externalMovement={groundMotion?.points ?? null}
         highlight={highlight}
-        onSelect={(bin) => select(bin)}
-        onUserInteract={demo.stop}
+        onSelect={(bin) => select(bin, bin !== null)}
+        onUserInteract={interruptMotion}
         onBasemapError={setBasemapError}
         cameraMode={cameraMode}
         flat={flat}
+        autoOrbit={orbiting && panelOpen && !flat && !demo.paused}
+        demoRunning={demo.running}
+        demoOpeningPhase={demo.openingPhase}
+        demoRunId={demo.runId}
+        demoPaused={demo.paused}
       />
 
       <AppHeader sidebarOpen={sidebarOpen} isMock={isMock}
@@ -387,9 +409,10 @@ export default function App() {
         <p>Gray = no prediction · Click a building to explore</p>
         <button type="button" className="text-link" onClick={() => setSidebarOpen(true)}>Explore priorities &amp; layers →</button>
       </div>}
-      <MapToolbar mode={cameraMode} flat={flat} onMode={setCameraMode} onReset={resetView}
-        onNorth={() => mapRef.current?.getMap().easeTo({ bearing: 0, duration: prefersReducedMotion() ? 0 : 600 })}
+      <MapToolbar mode={cameraMode} flat={flat} onMode={(mode) => { interruptMotion(); setCameraMode(mode); }} onReset={resetView}
+        onNorth={() => { interruptMotion(); mapRef.current?.getMap().easeTo({ bearing: 0, duration: prefersReducedMotion() ? 0 : 600 }); }}
         onDimension={() => {
+          interruptMotion();
           setFlat((v) => !v);
           mapRef.current?.getMap().easeTo({ pitch: flat ? 55 : 0, duration: prefersReducedMotion() ? 0 : 700 });
         }} />
@@ -451,6 +474,8 @@ export default function App() {
           geometry={selectedFeature?.geometry ?? highlight?.feature.geometry ?? null}
           geometryHeightM={highlight?.feature.properties.height_m ?? null}
           prediction={panelPrediction}
+          predictionGeneratedAt={scenePrediction ? predictions.generated_at : null}
+          predictionIsMock={Boolean(scenePrediction) && isMock}
           history={history}
           fallbackTitle={lookupLabel}
           rankScope={scenePrediction ? 'area' : 'citywide'}
@@ -460,14 +485,26 @@ export default function App() {
           status={assignments.get(selectedBin)}
           onStatusChange={(s) => assignments.set(selectedBin, s)}
           onOpenModelCard={() => setModelCardOpen(true)}
-          onClose={() => setPanelOpen(false)}
+          onClose={() => { interruptMotion(); setPanelOpen(false); }}
           isMock={isMock}
+          orbiting={orbiting && !flat && !prefersReducedMotion()}
+          orbitAvailable={!flat && !prefersReducedMotion()}
+          onToggleOrbit={() => { demo.stop(); setOrbiting((v) => !v); }}
+          demoCue={demo.cue}
+          demoRunId={demo.runId}
+          demoRunning={demo.running}
+          demoAwaitingInference={demo.awaitingInference}
+          demoAwaitingHistory={demo.awaitingHistory}
+          onDemoHistoryComplete={demo.completeHistory}
+          onDemoInferenceStart={demo.beginInference}
+          onDemoInferenceComplete={demo.completeInference}
+          onDemoInterrupt={() => { if (demo.paused && !demo.awaitingInference && !demo.awaitingHistory) demo.releaseCue(); else demo.stop(); }}
         />
       )}
 
       {modelCardOpen && <ModelCardDialog predictions={predictions} source={load.source} onClose={() => setModelCardOpen(false)} />}
 
-      <DemoController running={demo.running} elapsed={demo.elapsed} stage={demo.stage} onStop={demo.stop} />
+      <DemoController running={demo.running} paused={demo.paused} awaitingInference={demo.awaitingInference} awaitingHistory={demo.awaitingHistory} inferenceBusy={demo.inferenceBusy} elapsed={demo.elapsed} stage={demo.stage} onContinue={demo.resume} onSkipInference={demo.skipInference} onStop={interruptMotion} />
 
       <footer className="map-source">
         {join.scored.length.toLocaleString()} predictions · {fmtDate(predictions.data_as_of)}

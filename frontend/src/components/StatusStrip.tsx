@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { INITIAL_VIEW } from '../camera';
 import { sunState } from '../data/sunPosition';
 import { formatDate } from '../data/formatDate';
+import benchmark from '../../../ml/reports/linuxone/latency_s390x.json';
 
 /**
  * Measured model-inference time per score on the deployed service, median over 200 real requests
@@ -10,7 +11,12 @@ import { formatDate } from '../data/formatDate';
  * call only: the full request (about 86 ms) is dominated by rebuilding the building's features and
  * is the same on both engines, and energy was not measured, so neither is claimed here.
  */
-const INFERENCE_MS = { nnpa: 0.122, cpu: 0.358 };
+const INFERENCE_MS = {
+  nnpa: benchmark.engines.nnpa.model_inference_ms.median,
+  cpu: benchmark.engines.xgboost.model_inference_ms.median,
+};
+const BENCHMARK_DATE = benchmark.health.platform.timestamp_utc.slice(0, 10);
+const BENCHMARK_CONTEXT = `Saved ${BENCHMARK_DATE} benchmark, model ${benchmark.health.model}, ${benchmark.buildings} buildings on ${benchmark.health.platform.machine}. Model-only latency; not this session's timing and not end-to-end speed-up.`;
 
 export interface StatusStripProps {
   scored: number;
@@ -62,14 +68,14 @@ export function StatusStrip({ scored, mapped, dataAsOf, platform, isMock, select
 
       <div className="statusbar__group statusbar__group--end">
         <Readout
-          label="Model inference"
+          label={`Saved benchmark · ${BENCHMARK_DATE}`}
           value={`${INFERENCE_MS.nnpa.toFixed(3)} ms NNPA · ${INFERENCE_MS.cpu.toFixed(3)} ms CPU`}
-          title="Median model-inference time per score over 200 real requests on the deployed service. Same model, same machine, two engines. The full request (about 86 ms) is mostly feature building and is the same on both."
+          title={BENCHMARK_CONTEXT}
         />
         <Readout
-          label="NNPA speed-up"
+          label="Model-only speed-up"
           value={`${speedup.toFixed(1)}×`}
-          title="Model inference on the NNPA accelerator versus the CPU, same model and machine. Applies to the model call only, not the whole request; energy was not measured."
+          title={BENCHMARK_CONTEXT}
           accent
         />
         <Readout label="Platform" value={isMock ? 'Synthetic demo data' : platform} title="Where the scores were computed" drop />

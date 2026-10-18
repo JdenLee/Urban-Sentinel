@@ -91,6 +91,21 @@ export function buildingClassLabel(code: string | null): string | null {
   return CLASS_FAMILY[code.charAt(0).toUpperCase()] ?? null;
 }
 
+export type BuildingUse = 'Residential' | 'Commercial' | 'Mixed use' | 'Utility' | 'Transportation' | 'Industrial' | 'Civic' | 'Other';
+/** PLUTO land use resolves ambiguous condo class R; utility and transport remain distinct. */
+export function buildingUse(facts: Pick<BuildingFacts, 'buildingClass' | 'landUse'>): BuildingUse {
+  const family = facts.buildingClass?.[0]?.toUpperCase();
+  if (family === 'U') return 'Utility';
+  if (family === 'T') return 'Transportation';
+  const use = facts.landUse ?? '';
+  if (/Mixed residential/i.test(use) || family === 'S') return 'Mixed use';
+  if (/family/i.test(use) || (family && 'ABCD'.includes(family))) return 'Residential';
+  if (/Commercial/i.test(use) || (family && 'HKO'.includes(family))) return 'Commercial';
+  if (/Industrial/i.test(use) || (family && 'EF'.includes(family))) return 'Industrial';
+  if (/Public facilities/i.test(use) || (family && 'IMNWY'.includes(family))) return 'Civic';
+  return 'Other';
+}
+
 function num(v: unknown): number | null {
   if (v === null || v === undefined || v === '') return null;
   const n = Number(v);
@@ -161,7 +176,7 @@ const PLUTO_FIELDS = [
 ].join(',');
 
 async function getJson(url: string): Promise<unknown> {
-  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(10000) });
   if (!res.ok) throw new Error(`${res.status} from ${new URL(url).hostname}`);
   return res.json();
 }

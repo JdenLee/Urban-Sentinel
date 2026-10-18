@@ -33,3 +33,48 @@ export function historyCounts(records: RecordEvent[], dates: string[]): number[]
     return count;
   });
 }
+
+export const FACADE_RATINGS = ['SAFE', 'SWARMP', 'UNSAFE'] as const;
+export type FacadeRating = typeof FACADE_RATINGS[number];
+export interface FacadeObservation { date: string; rating: FacadeRating | null; ambiguous: boolean }
+
+export function filingRating(record: RecordEvent): FacadeRating | null {
+  if (record.type.toLowerCase() !== 'fisp filing') return null;
+  // Older exports have only "Cycle 8: UNSAFE". Match that exact format, not arbitrary prose.
+  const value = record.status?.trim().toUpperCase() ??
+    /^(?:Cycle [\d?]+:\s*)?(SAFE|SWARMP|UNSAFE)$/i.exec(record.description.trim())?.[1]?.toUpperCase();
+  return FACADE_RATINGS.includes(value as FacadeRating) ? value as FacadeRating : null;
+}
+
+/** Missing ratings and conflicting same-day filings are gaps, never invented improvements. */
+export function facadeHistory(records: RecordEvent[], cutoff: string): FacadeObservation[] {
+  const groups = new Map<string, Set<FacadeRating | null>>();
+  for (const record of historyAt(records, [], cutoff).records) {
+    if (record.type.toLowerCase() !== 'fisp filing') continue;
+    const date = recordDate(record.date)!;
+    const ratings = groups.get(date) ?? new Set<FacadeRating | null>();
+    ratings.add(filingRating(record));
+    groups.set(date, ratings);
+  }
+  return [...groups].sort(([a], [b]) => a.localeCompare(b)).map(([date, ratings]) => ({
+    date, rating: ratings.size === 1 ? [...ratings][0] : null, ambiguous: ratings.size > 1,
+  }));
+}
+
+export function facadeChange(observations: FacadeObservation[]) {
+  const latest = observations.at(-1), previous = observations.at(-2);
+  if (!latest?.rating) {
+    const known = observations.filter((p) => p.rating).at(-1);
+    return { direction: 'unknown', rating: latest?.ambiguous ? null : known?.rating ?? null,
+      headline: known && !latest?.ambiguous ? `Last rated filing: ${known.rating}` : 'Condition change unknown',
+      detail: latest?.ambiguous ? 'Conflicting same-day ratings. Check the official filings.' : known
+        ? `${known.date}. A later record has no comparable rating; subsequent condition change is unknown.`
+        : 'No comparable dated façade rating at this point.' };
+  }
+  if (!previous?.rating) return { direction: 'unknown', rating: latest.rating, headline: `Latest recorded rating: ${latest.rating}`,
+    detail: 'Two comparable consecutive filings are needed to describe a change.' };
+  const delta = FACADE_RATINGS.indexOf(latest.rating) - FACADE_RATINGS.indexOf(previous.rating);
+  return { direction: delta > 0 ? 'worse' : delta < 0 ? 'better' : 'same', rating: latest.rating,
+    headline: delta > 0 ? 'Last rating change: worse' : delta < 0 ? 'Last rating change: better' : 'Last rating change: unchanged',
+    detail: `${previous.rating} (${previous.date}) → ${latest.rating} (${latest.date})` };
+}

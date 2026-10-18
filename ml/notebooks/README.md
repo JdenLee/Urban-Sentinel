@@ -13,12 +13,17 @@ stack with geospatial packages. These steps run **on the instance**, in the chec
 
 ```bash
 git fetch origin
-git switch codex/linuxone-presentation-notebook
+git switch main
+git pull --ff-only origin main
 python -m pip install -r ml/notebooks/requirements.txt
 python -m ipykernel install --user --name urban-sentinel --display-name 'Urban Sentinel (LinuxONE ML)'
 ```
 
 Select **Urban Sentinel (LinuxONE ML)** in JupyterLab, restart, then Run All.
+Keep any local edits on their own branch before switching. `Urban_Sentinel_Analysis.ipynb`
+is the companion exploratory analysis; the presentation notebook rebuilds isolated
+artifacts and does not install a model into the live service. The analysis notebook's
+optional inference section requires existing deployed artifacts in the configured data directory.
 No new Jupyter server is required if the instance already provides JupyterLab.
 If launching your own server, bind it to localhost and access it through an SSH
 tunnel; keep token authentication enabled. Never record tokens, credentials or
