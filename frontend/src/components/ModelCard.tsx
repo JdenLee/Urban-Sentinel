@@ -2,12 +2,9 @@ import { useEffect, useRef } from 'react';
 import type { PredictionSet } from '../types/predictions';
 import { PRIORITY_RANGE } from '../data/priority';
 import type { PredictionSource } from '../config';
+import { formatDate } from '../data/formatDate';
 
-const fmtDate = (s: string | null) => {
-  if (!s) return '—';
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? s : d.toISOString().slice(0, 10);
-};
+const fmtDate = formatDate;
 
 /** Model card: what the score means, how it was validated, and its limits. */
 export function ModelCardDialog({ predictions, source, onClose }: { predictions: PredictionSet; source: PredictionSource; onClose: () => void }) {
@@ -90,7 +87,7 @@ export function ModelCardDialog({ predictions, source, onClose }: { predictions:
             </div>
             <div className="kv__row">
               <dt>Trained through</dt>
-              <dd className="mono">{model.trained_through ?? '—'}</dd>
+              <dd className="mono">{fmtDate(model.trained_through)}</dd>
             </div>
             <div className="kv__row">
               <dt>Data as of</dt>

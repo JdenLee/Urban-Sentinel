@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { parseGroundMotion } from './loadGroundMotion';
 import { loadPredictionsWithFallback } from './loadPredictions';
+import { formatDate } from './formatDate';
 
 const mlRecord = (bin: string, probability: number, rank: number) => ({
   bin,
@@ -49,5 +50,13 @@ describe('loadPredictionsWithFallback', () => {
     expect(out.set.data_mode).toBe('real');
     expect(out.set.buildings[0].bin).toBe('1000001');
     expect(out.failures[0]).toContain('Live');
+  });
+});
+
+describe('formatDate', () => {
+  it('formats ISO dates and leaves labels such as "FISP cycle 9" untouched', () => {
+    expect(formatDate('2026-10-17T22:47:00Z')).toBe('2026-10-17');
+    expect(formatDate('FISP cycle 9')).toBe('FISP cycle 9');
+    expect(formatDate(null)).toBe('—');
   });
 });

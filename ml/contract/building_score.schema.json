@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Urban Sentinel building record",
+  "description": "One NYC building in the Façade Inspection & Safety Program. `prediction` is null when the building has already filed in the current cycle (its recorded result is in fisp.current_cycle_status). Served by GET /buildings/{bin}; collections by GET /top and GET /buildings.geojson.",
+  "type": "object",
+  "required": ["bin", "bbl", "address", "borough", "lat", "lon", "fisp", "prediction", "drivers", "provenance", "missing"],
+  "properties": {
+    "bin": {"type": "string", "pattern": "^[1-5][0-9]{6}$", "description": "NYC Building Identification Number (join key to footprints)"},
+    "bbl": {"type": ["string", "null"], "description": "10-digit borough-block-lot (billing BBL for condos)"},
+    "address": {"type": ["string", "null"]},
+    "borough": {"type": ["string", "null"]},
+    "lat": {"type": ["number", "null"], "description": "PLUTO lot centroid (WGS84); null when unavailable"},
+    "lon": {"type": ["number", "null"]},
+    "fisp": {
+      "type": "object",
+      "required": ["subcycle", "current_cycle", "filing_window_closes", "status_on_record", "current_cycle_filed", "current_cycle_status", "history"],
+      "properties": {
+        "subcycle": {"enum": ["A", "B", "C", null]},
+        "current_cycle": {"type": "integer"},
+        "filing_window_closes": {"type": ["string", "null"], "format": "date"},
+        "status_on_record": {"enum": ["SAFE", "SWARMP", "UNSAFE", "none on record"], "description": "Latest recorded status as of the data date (RECORDED, not predicted)"},
+        "current_cycle_filed": {"type": "boolean"},
+        "current_cycle_status": {"enum": ["SAFE", "SWARMP", "UNSAFE", null]},
+        "history": {"type": "array", "items": {"type": "object", "required": ["cycle", "status", "filed_on"],
+          "properties": {"cycle": {"type": "integer"}, "status": {"enum": ["SAFE", "SWARMP", "UNSAFE"]}, "filed_on": {"type": ["string", "null"], "format": "date"}}}}
+      }
+    },
+    "prediction": {
+      "anyOf": [
+        {"type": "object",
+         "required": ["target", "probability", "rank", "of", "percentile", "tier", "model_version", "scored_at", "scored_on"],
+         "properties": {
+           "target": {"type": "string", "description": "Exact meaning of probability (a recorded inspection outcome, not collapse risk)"},
+           "probability": {"type": "number", "minimum": 0, "maximum": 1, "description": "Calibrated (isotonic) probability"},
+           "rank": {"type": "integer", "minimum": 1, "description": "1 = highest priority among pending buildings"},
+           "of": {"type": "integer"},
+           "percentile": {"type": "number"},
+           "tier": {"enum": ["high", "elevated", "typical", "low"], "description": "Rank percentile: high ≤5%, elevated ≤20%, typical ≤60%"},
+           "model_version": {"type": "string"},
+           "scored_at": {"type": "string", "format": "date-time"},
+           "scored_on": {"type": "object", "properties": {"machine": {"type": "string"}, "byteorder": {"type": "string"}}}
+         }},
+        {"type": "null"}
+      ]
+    },
+    "drivers": {"type": "array", "maxItems": 3, "items": {"type": "object", "required": ["feature", "label", "value", "effect", "log_odds"],
+      "properties": {"feature": {"type": "string"}, "label": {"type": "string"}, "value": {"type": "string"},
+                     "effect": {"enum": ["raises", "lowers"]}, "log_odds": {"type": "number", "description": "TreeSHAP contribution"}}}},
+    "provenance": {"type": "object"},
+    "missing": {"type": "array", "items": {"type": "string"}, "description": "Absent or uncertain inputs for this building"}
+  }
+}
