@@ -9,17 +9,19 @@ export interface Landmark {
   model?: 'one-wtc';
   architecturalHeight?: number;
   completed?: number;
+  /** Wikimedia Commons file shown as the building's photo, credited from Commons at runtime. */
+  photo?: string;
 }
 
 /** Presentation metadata keyed to verified NYC footprint BINs; never supplies a score. */
 export const LANDMARKS: readonly Landmark[] = [
-  { bin: '1088469', name: 'One World Trade Center', address: '1 World Trade Center', aliases: ['World Trade Center', 'Freedom Tower', 'One WTC', '1 WTC'], source: 'https://www.som.com/projects/one-world-trade-center/', model: 'one-wtc', architecturalHeight: 541.3, completed: 2014 },
-  { bin: '1086510', name: '7 World Trade Center', address: '250 Greenwich Street', aliases: ['Seven World Trade Center', '7 WTC'], source: 'https://www.som.com/projects/7-world-trade-center/' },
-  { bin: '1087167', name: 'Woolworth Building', address: '233 Broadway', aliases: ['Woolworth'], source: 'https://woolworthbuilding.com/' },
-  { bin: '1079147', name: 'New York City Hall', address: 'City Hall Park', aliases: ['City Hall'], source: 'https://www.nyc.gov/site/dcas/business/dcasmanagedbuildings/city-hall.page' },
-  { bin: '1001018', name: 'The Trump Building', address: '40 Wall Street', aliases: ['40 Wall Street', 'Bank of Manhattan'], source: 'https://40wallstreet.com/' },
-  { bin: '1001007', name: '70 Pine Street', address: '70 Pine Street', aliases: ['Cities Service Building', 'American International Building'], source: 'https://70pine.com/' },
-  { bin: '1087485', name: '8 Spruce · New York by Gehry', address: '8 Spruce Street', aliases: ['8 Spruce', 'New York by Gehry', 'Beekman Tower'], source: 'https://www.8sprucestreet.com/' },
+  { bin: '1088469', name: 'One World Trade Center', address: '1 World Trade Center', aliases: ['World Trade Center', 'Freedom Tower', 'One WTC', '1 WTC'], source: 'https://www.som.com/projects/one-world-trade-center/', model: 'one-wtc', architecturalHeight: 541.3, completed: 2014, photo: 'File:One World Trade Center 2023.jpg' },
+  { bin: '1086510', name: '7 World Trade Center', address: '250 Greenwich Street', aliases: ['Seven World Trade Center', '7 WTC'], source: 'https://www.som.com/projects/7-world-trade-center/', photo: 'File:7 World Trade Center from 3WTC (cropped).jpg' },
+  { bin: '1087167', name: 'Woolworth Building', address: '233 Broadway', aliases: ['Woolworth'], source: 'https://woolworthbuilding.com/', photo: 'File:Woolworth Building in fall.jpg' },
+  { bin: '1079147', name: 'New York City Hall', address: 'City Hall Park', aliases: ['City Hall'], source: 'https://www.nyc.gov/site/dcas/business/dcasmanagedbuildings/city-hall.page', photo: 'File:New York City Hall exterior, October 2016.jpg' },
+  { bin: '1001018', name: 'The Trump Building', address: '40 Wall Street', aliases: ['40 Wall Street', 'Bank of Manhattan'], source: 'https://40wallstreet.com/', photo: 'File:40 Wall Street.jpg' },
+  { bin: '1001007', name: '70 Pine Street', address: '70 Pine Street', aliases: ['Cities Service Building', 'American International Building'], source: 'https://70pine.com/', photo: 'File:American International Building3 (cropped).JPG' },
+  { bin: '1087485', name: '8 Spruce · New York by Gehry', address: '8 Spruce Street', aliases: ['8 Spruce', 'New York by Gehry', 'Beekman Tower'], source: 'https://www.8sprucestreet.com/', photo: 'File:8 Spruce Street 2015.jpg' },
 ];
 
 const byBin = new Map(LANDMARKS.map((landmark) => [landmark.bin, landmark]));

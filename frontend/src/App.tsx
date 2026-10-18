@@ -417,6 +417,8 @@ export default function App() {
           bin={selectedBin}
           feature={selectedFeature}
           coverageLabels={predictions.coverage?.labels ?? null}
+          geometry={selectedFeature?.geometry ?? highlight?.feature.geometry ?? null}
+          geometryHeightM={highlight?.feature.properties.height_m ?? null}
           prediction={panelPrediction}
           history={history}
           fallbackTitle={lookupLabel}

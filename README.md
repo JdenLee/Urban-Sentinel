@@ -67,6 +67,7 @@ In December 2019, architect Erica Tishman was killed by façade debris falling f
 | **Why this building?** | The top factors behind each score, in plain language |
 | **Satellite ground motion** | Ground movement measured from space, shown as a separate background layer |
 | **Search and history** | Look up any NYC address or Building Identification Number (BIN) and see its inspection and violation record |
+| **Building profile** | A real aerial photo of the selected building with its footprint outlined (New York State orthoimagery, 2022–25), a photo for named landmarks, a Street View link, and floors, units and floor area from NYC MapPLUTO |
 
 ![Building detail: rank, probability, warning signals and the Recalculate on IBM Z button](docs/screenshots/building-panel.jpg)
 
