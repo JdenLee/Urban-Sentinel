@@ -65,6 +65,8 @@ export interface BuildingPanelProps {
   status: AssignmentStatus;
   onStatusChange: (s: AssignmentStatus) => void;
   onOpenModelCard: () => void;
+  /** Coverage reason wording from the export, for buildings without a score. */
+  coverageLabels?: Record<string, string> | null;
   onClose: () => void;
 }
 
@@ -137,12 +139,7 @@ export function BuildingPanel(props: BuildingPanelProps) {
       )}
 
       <div className="building-panel__body" role="tabpanel">
-        {!p && (
-          <section className="coverage-notice">
-            <h3 className="section-title">No model score available</h3>
-            <p>This building is mapped, but no prediction is available in the loaded data. Unscored does not mean low risk.</p>
-          </section>
-        )}
+        {!p && <NoScoreNotice feature={feature} bin={bin} labels={props.coverageLabels} />}
         {active === 'overview' && p && <OverviewTab {...props} p={p} color={color} />}
         {active === 'evidence' && p && <EvidenceTab p={p} />}
         {active === 'history' && <HistoryTab p={p} history={history} color={color} bin={bin} />}
@@ -432,6 +429,40 @@ function SourcesList({ sources }: { sources: SourceRef[] }) {
         </div>
       ))}
     </dl>
+  );
+}
+
+/** Why a footprint has no prediction: its recorded result this cycle, or the coverage reason from the export. */
+function NoScoreNotice({ feature, bin, labels }: { feature: JoinedFeature | null; bin: string; labels?: Record<string, string> | null }) {
+  const rec = feature?.properties.recorded ?? null;
+  if (rec) {
+    const url = openDataFilingUrl({ bin, cycle: rec.cycle, reference: rec.reference });
+    return (
+      <section className="coverage-notice">
+        <h3 className="section-title">Already inspected this cycle</h3>
+        <p>
+          Cycle {rec.cycle ?? '—'} façade report filed{rec.filed_on ? ` ${rec.filed_on}` : ''}: recorded <strong>{rec.status}</strong>. The outcome is
+          known, so no prediction is needed.
+          {url && (
+            <>
+              {' '}
+              <a className="record-link" href={url} target="_blank" rel="noopener noreferrer">View filing ↗</a>
+            </>
+          )}
+        </p>
+      </section>
+    );
+  }
+  const reason = feature?.properties.unscoredReason ?? null;
+  return (
+    <section className="coverage-notice">
+      <h3 className="section-title">No model score</h3>
+      <p>
+        {reason && labels?.[reason]
+          ? `${labels[reason]}. The model scores buildings in NYC's façade inspection program; this is not a low-risk rating.`
+          : 'This building is mapped, but no prediction is available in the loaded data. Unscored does not mean low risk.'}
+      </p>
+    </section>
   );
 }
 

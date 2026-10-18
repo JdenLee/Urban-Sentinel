@@ -139,7 +139,9 @@ def build_records(ctx: Context, model: DeployedModel, now: pd.Timestamp, pluto: 
     current = cycle_at(now)
     fac = ctx.fac
     seen = fac[(fac["observed_on"] <= now) | fac["observed_on"].isna()]
-    universe = pd.Index(sorted(set(seen.loc[seen["cycle"] >= current - 1, "bin"])), name="bin")
+    # In the program = any FISP record in the current or previous two cycles. (Requiring cycle 9/10 activity
+    # dropped buildings such as 7 World Trade Center whose last filing was cycle 8.)
+    universe = pd.Index(sorted(set(seen.loc[seen["cycle"] >= current - 2, "bin"])), name="bin")
     filed_now = build_labels(seen, current)
     pending = universe.difference(filed_now.index)
 

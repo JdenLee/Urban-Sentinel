@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import evidence, history, score
 from .artifacts import DeployedModel
 from .config import OUTPUT_DIR, REPORTS_DIR, cycle_at
-from .export_frontend import GROUND_MOTION_FILE, LOWER_MANHATTAN_BBOX, frontend_payload
+from .export_frontend import DEFAULT_FOOTPRINTS, GROUND_MOTION_FILE, LOWER_MANHATTAN_BBOX, frontend_payload, map_coverage
 from .featureset import Context, feature_matrix
 
 SCORES_FILE = OUTPUT_DIR / "buildings_scores.json"
@@ -29,6 +29,7 @@ class State:
     def __init__(self) -> None:
         self.lock = threading.Lock()
         self.rescoring = False
+        self.coverage: dict | None = None
         self.load()
 
     def load(self) -> None:
@@ -127,7 +128,14 @@ def predictions(bbox: str | None = Query(None, description="minLon,minLat,maxLon
     box = tuple(float(v) for v in bbox.split(",")) if bbox else LOWER_MANHATTAN_BBOX
     if len(box) != 4:
         raise HTTPException(422, "bbox must be minLon,minLat,maxLon,maxLat")
-    return frontend_payload(list(state.buildings.values()), state.meta, box)
+    if state.coverage is None and bbox is None:
+        try:  # computed once (cached footprint/PLUTO lookups); the payload still works without it
+            state.coverage = map_coverage({"meta": state.meta, "buildings": list(state.buildings.values())}, DEFAULT_FOOTPRINTS) or {}
+        except Exception as exc:  # network or data issue: serve predictions without coverage reasons
+            state.coverage = {}
+            print(f"coverage unavailable: {exc}")
+    return frontend_payload(list(state.buildings.values()), state.meta, box,
+                            coverage=(state.coverage or None) if bbox is None else None)
 
 
 @app.get("/layers/ground-motion.geojson")

@@ -99,6 +99,24 @@ export interface PredictionSet {
   buildings: BuildingPrediction[];
   /** Records dropped during validation, with the reason, for the console and tests. */
   rejected: { bin: string | null; reason: string }[];
+  /** Buildings already filed this cycle: their recorded result, shown instead of a prediction. */
+  recorded: Map<string, RecordedOutcome>;
+  /** Why each unscored footprint has no score (from the ML export), when supplied. */
+  coverage: Coverage | null;
+}
+
+export interface RecordedOutcome {
+  bin: string;
+  status: string;
+  cycle: number | null;
+  filed_on: string | null;
+  reference: string | null;
+}
+
+export interface Coverage {
+  counts: Record<string, number>;
+  labels: Record<string, string>;
+  reasons: Map<string, string>;
 }
 
 export interface BuildingProperties {
@@ -116,6 +134,10 @@ export type BuildingCollection = FeatureCollection<BuildingGeometry, BuildingPro
 export interface JoinedProperties extends BuildingProperties {
   height_m: number;
   height_estimated: boolean;
+  /** Result already recorded this cycle (no prediction needed), if any. */
+  recorded?: RecordedOutcome | null;
+  /** Coverage reason code when the footprint has no score. */
+  unscoredReason?: string | null;
   prediction: BuildingPrediction | null;
 }
 export type JoinedFeature = Feature<BuildingGeometry, JoinedProperties>;
