@@ -197,15 +197,18 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--stack-dir", type=Path, required=True)
     ap.add_argument("--cutoff", default="2020-02-21")
+    ap.add_argument("--features", type=Path, help="Override the per-building feature file")
+    ap.add_argument("--buildings", type=Path, default=REPO / "data/insar/ref/fisp_buildings.csv.gz")
+    ap.add_argument("--out-dir", type=Path, default=HERE, help="Report, figures and sample destination")
     args = ap.parse_args()
     cut = args.cutoff
     rep = json.loads((args.stack_dir / f"quality_cutoff_{cut}.json").read_text())
     px = xr.open_dataset(args.stack_dir / f"pixel_velocity_cutoff_{cut}.nc", engine="h5netcdf")
-    feat_path = REPO / f"data/insar/insar_features_cutoff_{cut}.csv.gz"
+    feat_path = args.features or REPO / f"data/insar/insar_features_cutoff_{cut}.csv.gz"
     feat = pd.read_csv(feat_path)
 
-    figdir = HERE / "figures"
-    figdir.mkdir(exist_ok=True)
+    figdir = args.out_dir / "figures"
+    figdir.mkdir(parents=True, exist_ok=True)
     velocity_map(px, rep, figdir / "velocity_map.png")
     distributions(feat, figdir / "distributions.png")
     has_series = site_series(rep, figdir / "sanity_sites.png")
@@ -214,7 +217,7 @@ def main() -> None:
     # <=20-row sample: 3 rows with data per borough, then rows without data (NaN handling)
     sample = feat[feat["insar_has_data"] == 1].groupby("borough").sample(n=3, random_state=0)
     sample = pd.concat([sample, feat[feat["insar_has_data"] == 0].head(20 - len(sample))]).head(20)
-    sample.to_csv(HERE / "sample_features.txt", index=False, float_format="%.4f")
+    sample.to_csv(args.out_dir / "sample_features.txt", index=False, float_format="%.4f")
 
     # Signal-vs-noise summary at building level
     bv = feat["insar_vel_los_mm_yr"].dropna()
@@ -241,7 +244,7 @@ def main() -> None:
     ramp = rep["velocity_ramp"]
 
     # Confound check: do the features mostly encode building height (a likely existing feature)?
-    bld = pd.read_csv(REPO / "data/insar/ref/fisp_buildings.csv.gz", usecols=["bin", "height_roof_ft"])
+    bld = pd.read_csv(args.buildings, usecols=["bin", "height_roof_ft"])
     fh = feat.merge(bld, on="bin", how="left")
     corr_rows = []
     for col in ["insar_vel_los_mm_yr", "insar_vel_hp2km_mm_yr", "insar_vel_diff_local_mm_yr",
@@ -347,7 +350,7 @@ the regional ≈ −1.6 mm/yr (glacial isostatic adjustment). The fair compariso
 - This is ground/structure motion, **not structural-safety evidence**. A null result in the
   ablation is the expected outcome.
 """
-    (HERE / "QUALITY_REPORT.md").write_text(md)
+    (args.out_dir / "QUALITY_REPORT.md").write_text(md)
     print(md)
 
 
