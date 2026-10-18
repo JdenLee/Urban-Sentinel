@@ -40,3 +40,10 @@ export const AERIAL_EXPORT_URL = 'https://orthos.its.ny.gov/arcgis/rest/services
 
 /** Wikimedia Commons API, for the curated landmark photos and their credits. */
 export const COMMONS_API_URL = 'https://commons.wikimedia.org/w/api.php';
+
+/**
+ * Optional Google Maps browser key for Street View images in the record panel. Set it in
+ * frontend/.env.local (gitignored), restricted to the Street View Static API and this site's
+ * referrers. Without it the panel shows the aerial and landmark photos and a Street View link.
+ */
+export const GOOGLE_MAPS_KEY = (import.meta.env.VITE_GOOGLE_MAPS_KEY as string | undefined)?.trim() || undefined;

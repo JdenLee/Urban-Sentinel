@@ -95,6 +95,31 @@ export function streetViewUrl(lon: number, lat: number): string | null {
   return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat.toFixed(6)},${lon.toFixed(6)}`;
 }
 
+/**
+ * Street View Static image of the building, or null without a key.
+ *
+ * With a location and no heading, Google points the camera from the nearest outdoor panorama towards
+ * that location, so the building is in frame. Taller buildings get the camera tilted up. With
+ * return_error_code, a spot with no imagery answers 404 instead of a grey placeholder, so the slide
+ * can drop out. The key is a browser key restricted by HTTP referrer; it is never committed.
+ */
+export function streetViewImageUrl(lon: number, lat: number, heightM: number, key: string | undefined): string | null {
+  if (!key || !valid([lon, lat])) return null;
+  const pitch = Math.round(Math.min(28, 6 + Math.max(0, heightM) * 0.12));
+  const params = new URLSearchParams({
+    size: '640x356',
+    scale: '2',
+    location: `${lat.toFixed(6)},${lon.toFixed(6)}`,
+    radius: '60',
+    source: 'outdoor',
+    fov: '80',
+    pitch: String(pitch),
+    return_error_code: 'true',
+    key,
+  });
+  return `https://maps.googleapis.com/maps/api/streetview?${params}`;
+}
+
 export interface CommonsPhoto {
   src: string;
   /** Commons file page: the licence and full credit live there. */
