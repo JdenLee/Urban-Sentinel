@@ -12,7 +12,6 @@ import {
 } from '../data/shortlist';
 import { searchAddresses, type AddressMatch } from '../data/geosearch';
 import { buildingName, searchLandmarks } from '../data/landmarks';
-import { usePress } from '../motion/usePress';
 
 export interface ShortlistProps {
   scored: JoinedFeature[];
@@ -69,14 +68,13 @@ function SearchResult({ item, active, onHover, onChoose }: {
   onHover: () => void;
   onChoose: (item: SearchItem) => void;
 }) {
-  const press = usePress<HTMLButtonElement>(() => onChoose(item));
   const scoredFeature = (item.kind === 'scored' || item.kind === 'landmark') && item.feature.properties.prediction;
   return (
     <button
       type="button"
       className={`search__item${active ? ' is-active' : ''}`}
       onMouseEnter={onHover}
-      {...press}
+      onClick={() => onChoose(item)}
     >
       {scoredFeature ? (
         <span className="swatch swatch--sm" style={{ background: rgbCss(PRIORITY_COLOR[scoredFeature.priority]) }} />
@@ -97,16 +95,15 @@ function ShortlistRow({ feature, selected, status, onSelect }: {
 }) {
   const { bin, address, prediction } = feature.properties;
   const p = prediction!;
-  const press = usePress<HTMLButtonElement>(() => onSelect(bin));
   return (
-    <button type="button" className={`toplist__item${selected ? ' is-active' : ''}`} {...press}>
+    <button type="button" className={`toplist__item${selected ? ' is-active' : ''}`} onClick={() => onSelect(bin)}>
       <span className="toplist__rank mono">{p.rank}</span>
       <span className="swatch swatch--sm" style={{ background: rgbCss(PRIORITY_COLOR[p.priority]) }} />
       <span className="toplist__addr">{buildingName(bin, address)}</span>
       {status !== 'unassigned' ? (
         <span className={`status-tag status-tag--${status}`}>{ASSIGNMENT_LABEL[status]}</span>
       ) : (
-        <span className="toplist__score mono">{p.score.toFixed(2)}</span>
+        <span className="toplist__score mono">{p.probability === p.score ? `${Math.round(p.score * 100)}%` : p.score.toFixed(2)}</span>
       )}
     </button>
   );

@@ -308,12 +308,24 @@ async function main() {
       },
       geometry,
     };
-    // A BIN can have several footprint parts; keep the largest so BIN stays a unique join key.
+    // Keep every component and its measured height, while BIN remains a unique model/search key.
     const prev = byBin.get(bin);
-    if (!prev || Number(r.shape_area) > prev.area) byBin.set(bin, { area: Number(r.shape_area), feature });
+    const part = { geometry, height_m };
+    if (!prev) byBin.set(bin, { area: Number(r.shape_area), feature, parts: [part] });
+    else {
+      prev.parts.push(part);
+      if (Number(r.shape_area) > prev.area) { prev.area = Number(r.shape_area); prev.feature = feature; }
+    }
   }
 
-  const features = [...byBin.values()].map((v) => v.feature).sort((a, b) => a.properties.bin.localeCompare(b.properties.bin));
+  const features = [...byBin.values()].map((v) => {
+    if (v.parts.length > 1) {
+      v.feature.properties.parts = v.parts;
+      v.feature.properties.height_m = Math.max(...v.parts.map((p) => p.height_m ?? 0)) || null;
+    }
+    return v.feature;
+  }).sort((a, b) => a.properties.bin.localeCompare(b.properties.bin));
+  recorded = features.filter((f) => f.properties.material_source === 'filing').length;
   const fc = {
     type: 'FeatureCollection',
     metadata: {
@@ -322,6 +334,7 @@ async function main() {
         'exterior wall types from DOB NOW Façade Compliance Filings (xubg-57si)',
       bbox: [west, south, east, north],
       generated_by: 'frontend/scripts/prepare-buildings.mjs',
+      geometry_note: 'One BIN per building; source footprint components retain individual roof heights. No inferred setbacks or roof shapes.',
       units: { height_m: 'metres (converted from height_roof in feet)' },
       material: {
         classes: WALL_TYPE_MATCHERS.map(([id]) => id),

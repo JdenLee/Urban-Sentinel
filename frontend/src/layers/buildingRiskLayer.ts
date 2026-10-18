@@ -1,19 +1,19 @@
-import { GeoJsonLayer, ColumnLayer } from '@deck.gl/layers';
+import { GeoJsonLayer } from '@deck.gl/layers';
 import type { GeoJsonLayerProps } from '@deck.gl/layers';
 import type { Layer } from '@deck.gl/core';
 import type { JoinedFeature, Priority } from '../types/predictions';
-import { FILTERED_COLOR, PRIORITY_COLOR, RECORDED_COLOR, SELECTED_COLOR, UNSCORED_COLOR } from '../data/priority';
-import { featureCentroid } from '../data/joinByBin';
+import { FILTERED_COLOR, PRIORITY_COLOR, SELECTED_COLOR, UNSCORED_COLOR } from '../data/priority';
 import { landmarkFor } from '../data/landmarks';
 import { materialIndex, storeyHeight } from '../data/facadeMaterials';
 import type { SunState } from '../data/sunPosition';
 import { FACADE_MATERIAL } from './FacadeMaterialExtension';
 import { landmarkLayers } from './landmarkLayer';
+import { renderParts } from '../data/buildingParts';
 
 type RGBA = [number, number, number, number];
 
 const CONTEXT_FILL: RGBA = [...UNSCORED_COLOR, 255];
-const SCORED_NEUTRAL: RGBA = [96, 104, 122, 255];
+const SCORED_NEUTRAL: RGBA = [182, 179, 168, 255];
 const COLOR_TRANSITION_MS = 1600;
 
 const MATERIAL = { ambient: 0.45, diffuse: 0.6, shininess: 24, specularColor: [70, 80, 110] as [number, number, number] };
@@ -40,7 +40,7 @@ function facadeProps(sun: SunState): Partial<GeoJsonLayerProps<JoinedFeature['pr
 function ordinaryBuildings(features: JoinedFeature[]): JoinedFeature[] {
   let ordinary = ordinaryCache.get(features);
   if (!ordinary) {
-    ordinary = features.filter((f) => !landmarkFor(f.properties.bin)?.model);
+    ordinary = features.filter((f) => !landmarkFor(f.properties.bin)?.model).flatMap(renderParts);
     ordinaryCache.set(features, ordinary);
   }
   return ordinary;
@@ -85,7 +85,7 @@ function riskColor(f: JoinedFeature, o: BuildingLayerOptions): RGBA {
  *  - selection: wireframe shell plus a light beam above the selected building
  */
 export function buildingRiskLayers(options: BuildingLayerOptions): Layer[] {
-  const { context, scored, showRisk, selectedBin, visiblePriorities, capacityCutoff, pulse, sun, highlight } = options;
+  const { context, scored, showRisk, selectedBin, visiblePriorities, capacityCutoff, sun, highlight } = options;
   const filterKey = [...visiblePriorities].sort().join(',');
   const facade = facadeProps(sun);
   const layers: Layer[] = [
@@ -99,9 +99,7 @@ export function buildingRiskLayers(options: BuildingLayerOptions): Layer[] {
       getElevation: (f) => f.properties.height_m,
       getFillColor: (f) => {
         if (f.properties.bin === selectedBin) return [...SELECTED_COLOR, 255];
-        const rec = showRisk ? f.properties.recorded : null;
-        const c = rec ? RECORDED_COLOR[rec.status] : undefined;
-        return c ? [...c, 255] : CONTEXT_FILL;
+        return CONTEXT_FILL;
       },
       material: MATERIAL,
       pickable: true,
@@ -147,30 +145,16 @@ export function buildingRiskLayers(options: BuildingLayerOptions): Layer[] {
   const selected =
     (selectedBin ? scored.find((f) => f.properties.bin === selectedBin) : undefined) ?? highlight?.feature;
   if (selected && !landmarkFor(selected.properties.bin)?.model) {
-    const top = selected.properties.height_m;
     layers.push(
       new GeoJsonLayer<JoinedFeature['properties']>({
         id: 'selected-shell',
-        data: [selected],
+        data: renderParts(selected),
         extruded: true,
         wireframe: true,
         filled: false,
-        getElevation: top + 1.5,
-        getLineColor: [210, 255, 255, 255],
+        getElevation: (f) => f.properties.height_m + 0.6,
+        getLineColor: [35, 76, 80, 255],
         pickable: false,
-      }),
-      new ColumnLayer<{ position: [number, number] }>({
-        id: 'selected-beacon',
-        data: [{ position: featureCentroid(selected) }],
-        diskResolution: 24,
-        radius: 3.5 + 1.5 * pulse,
-        extruded: true,
-        getPosition: (d) => [d.position[0], d.position[1], top],
-        getElevation: 140,
-        getFillColor: [160, 240, 255, Math.round(40 + 20 * (1 - pulse))],
-        material: false,
-        pickable: false,
-        parameters: { depthWriteEnabled: false },
       }),
     );
   }
