@@ -4,6 +4,7 @@ import { CollisionFilterExtension, type CollisionFilterExtensionProps } from '@d
 import type { JoinedFeature } from '../types/predictions';
 import { featureCentroid } from '../data/joinByBin';
 import { displayHeight, landmarkFor } from '../data/landmarks';
+import { SELECTED_COLOR } from '../data/priority';
 import { oneWtcGeometry, type LandmarkFace, type LandmarkLine } from '../data/landmarkGeometry';
 
 type RGBA = [number, number, number, number];
@@ -19,7 +20,7 @@ export function landmarkLayers(features: JoinedFeature[], selectedBin: string | 
     if (!geometry) { geometry = oneWtcGeometry(f); geometryCache.set(f, geometry); }
     const selected = f.properties.bin === selectedBin;
     // A neutral silver-gray landmark is still unscored. Never give it a priority color without a prediction.
-    const base: RGBA = !f.properties.prediction ? [110, 133, 154, 255] : colorFor(f);
+    const base: RGBA = selected ? [...SELECTED_COLOR, 255] : !f.properties.prediction ? [110, 133, 154, 255] : colorFor(f);
     layers.push(
       new SolidPolygonLayer<LandmarkFace>({
         id: `landmark-${f.properties.bin}`, data: geometry.faces, _full3d: true,
@@ -33,7 +34,7 @@ export function landmarkLayers(features: JoinedFeature[], selectedBin: string | 
       }),
       new PathLayer<LandmarkLine>({
         id: 'landmark-wtc-edges', data: geometry.edges, getPath: (d) => d.path,
-        getColor: selected ? [185, 251, 255, 230] : [170, 193, 211, 155], getWidth: 0.32, widthUnits: 'meters', widthMinPixels: 0.3, widthMaxPixels: 1.1,
+        getColor: selected ? [185, 251, 255, 255] : [170, 193, 211, 155], getWidth: 0.32, widthUnits: 'meters', widthMinPixels: selected ? 1.5 : 0.3, widthMaxPixels: selected ? 2 : 1.1,
         pickable: false, getPolygonOffset: () => [-3, -3],
       }),
       new PathLayer<LandmarkLine>({

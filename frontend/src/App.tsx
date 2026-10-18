@@ -8,7 +8,7 @@ import { RiskLegend } from './components/RiskLegend';
 import { SearchBox, Shortlist } from './components/Shortlist';
 import { MovementLegend } from './components/MovementLegend';
 import { ModelCardDialog } from './components/ModelCard';
-import { DemoController, useDemoRunner, type DemoTarget } from './components/DemoController';
+import { DemoController, useDemoRunner, type DemoMotion, type DemoTarget } from './components/DemoController';
 import { loadBuildings } from './data/loadBuildings';
 import { loadPredictionsWithFallback } from './data/loadPredictions';
 import { loadGroundMotion, type GroundMotionLayer } from './data/loadGroundMotion';
@@ -17,6 +17,7 @@ import { DEFAULT_HEIGHT_M, featureCentroid, joinByBin } from './data/joinByBin';
 import { fetchFootprint, fetchHistory } from './data/loadHistory';
 import { useAssignments } from './data/shortlist';
 import { INITIAL_CAMERA, prefersReducedMotion } from './camera';
+import { focusBuilding } from './buildingFocus';
 import { formatDate } from './data/formatDate';
 import { API_BASE } from './config';
 import { displayHeight } from './data/landmarks';
@@ -75,6 +76,13 @@ export default function App() {
   const [external, setExternal] = useState<JoinedFeature | null>(null);
   /** Set when a lookup had no coordinates yet: fly once the footprint or history provides them. */
   const pendingFly = useRef(false);
+  const cancelFocus = useRef<(() => void) | null>(null);
+  const stopFocus = useCallback(() => {
+    pendingFly.current = false;
+    cancelFocus.current?.();
+    cancelFocus.current = null;
+  }, []);
+  useEffect(() => stopFocus, [stopFocus]);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -115,63 +123,70 @@ export default function App() {
   }, [demoTarget]);
   const demo = useDemoRunner(getActions);
 
-  const startDemo = useCallback(() => {
+  const startDemo = useCallback((motion: DemoMotion) => {
+    stopFocus();
     // The demo tells the full story, so clear any filters first.
     setVisiblePriorities(new Set(PRIORITIES));
     setShortlistOnly(false);
     setModelCardOpen(false);
-    demo.start();
-  }, [demo]);
+    demo.start(motion);
+  }, [demo, stopFocus]);
+
+  const stopMotion = useCallback(() => {
+    stopFocus();
+    demo.stop();
+  }, [demo.stop, stopFocus]);
+
+  const closePanel = useCallback(() => {
+    stopMotion();
+    setPanelOpen(false);
+  }, [stopMotion]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || modelCardOpen) return;
+      stopFocus();
       if (demo.running) demo.stop();
       else setPanelOpen(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [demo, modelCardOpen]);
+  }, [demo, modelCardOpen, stopFocus]);
 
   const featureByBin = useMemo(() => new Map((join?.features ?? []).map((f) => [f.properties.bin, f])), [join]);
 
   const flyTo = useCallback((center: [number, number], height = 0) => {
+    stopFocus();
     const map = mapRef.current?.getMap();
     if (!map) return;
-    map.flyTo({
-      center,
-      zoom: height > 300 ? 15.05 : height > 120 ? 15.7 : Math.max(map.getZoom(), 16.2),
-      pitch: height > 300 ? 52 : 60,
-      padding: isNarrow() ? { top: height > 300 ? 140 : 40, bottom: 40, left: 20, right: 20 } : { top: height > 300 ? 200 : 40, bottom: 40, left: 340, right: 420 },
-      duration: prefersReducedMotion() ? 0 : 2200,
-    });
-  }, []);
+    cancelFocus.current = focusBuilding(map, center, height);
+  }, [stopFocus]);
 
   /** Select any building: a scene footprint (map click, shortlist, search) or a looked-up BIN. */
   const select = useCallback(
-    (bin: string | null, fly = false, target?: LookupTarget) => {
-      demo.stop();
+    (bin: string | null, target?: LookupTarget) => {
+      stopMotion();
       setSelectedBin(bin);
       setPanelOpen(bin !== null);
       setLookupLabel(target?.label ?? null);
       pendingFly.current = false;
       if (bin && isNarrow()) setSidebarOpen(false);
-      if (!bin || !fly) return;
+      if (!bin) return;
       const f = featureByBin.get(bin);
       if (f) flyTo(featureCentroid(f), displayHeight(f));
       else if (target?.lonLat) flyTo(target.lonLat);
       else pendingFly.current = true;
     },
-    [demo, featureByBin, flyTo],
+    [stopMotion, featureByBin, flyTo],
   );
-  const lookup = useCallback((target: LookupTarget) => select(target.bin, true, target), [select]);
+  const lookup = useCallback((target: LookupTarget) => select(target.bin, target), [select]);
 
   /** Selected building without a priority colour: an unscored scene footprint or a fetched external one. */
   const highlight = useMemo(() => {
     if (!selectedBin) return null;
     const f = featureByBin.get(selectedBin);
     if (f) return f.properties.prediction ? null : { feature: f, external: false };
-    return external ? { feature: external, external: true } : null;
+    return external?.properties.bin === selectedBin ? { feature: external, external: true } : null;
   }, [selectedBin, featureByBin, external]);
 
   // Building history from the ML API, for whichever building is selected.
@@ -188,6 +203,7 @@ export default function App() {
     setHistory({ status: 'loading' });
     fetchHistory(selectedBin, ctrl.signal)
       .then((data) => {
+        if (ctrl.signal.aborted) return;
         setHistory({ status: 'ready', data });
         if (pendingFly.current && data.lonLat) {
           pendingFly.current = false;
@@ -208,7 +224,7 @@ export default function App() {
     const ctrl = new AbortController();
     fetchFootprint(selectedBin, ctrl.signal)
       .then((fp) => {
-        if (!fp) return;
+        if (!fp || ctrl.signal.aborted) return;
         const jf = toJoined(fp);
         setExternal(jf);
         if (pendingFly.current) {
@@ -223,7 +239,7 @@ export default function App() {
   }, [selectedBin, featureByBin, flyTo]);
 
   const resetView = useCallback(() => {
-    demo.stop();
+    stopMotion();
     setPanelOpen(false);
     setSelectedBin(null);
     mapRef.current?.getMap().flyTo({
@@ -231,7 +247,7 @@ export default function App() {
       padding: { top: 0, bottom: 0, left: 0, right: 0 },
       duration: prefersReducedMotion() ? 0 : 2400,
     });
-  }, [demo]);
+  }, [stopMotion]);
 
   const togglePriority = useCallback((p: Priority) => {
     setVisiblePriorities((prev) => {
@@ -308,7 +324,7 @@ export default function App() {
         externalMovement={groundMotion?.points ?? null}
         highlight={highlight}
         onSelect={(bin) => select(bin)}
-        onUserInteract={demo.stop}
+        onUserInteract={stopMotion}
         onBasemapError={setBasemapError}
       />
       <div className="vignette" aria-hidden />
@@ -321,7 +337,7 @@ export default function App() {
           <span className="workspace-heading__label">Inspection desk</span>
           <span className="workspace-heading__count mono">{join.scored.length.toLocaleString()} scored / {join.features.length.toLocaleString()} mapped</span>
         </div>
-        <SearchBox scored={join.scored} features={join.features} onSelect={(bin) => select(bin, true)} onLookup={lookup} />
+        <SearchBox scored={join.scored} features={join.features} onSelect={select} onLookup={lookup} />
         <LayerControls
           showRisk={showRisk}
           showMovement={movementOn}
@@ -348,7 +364,7 @@ export default function App() {
           status={assignments.get}
           onCapacity={setCapacity}
           onShortlistOnly={setShortlistOnly}
-          onSelect={(bin) => select(bin, true)}
+          onSelect={select}
         />
         <div className="sidebar__foot">
           <span>Data as of <span className="mono">{fmtDate(predictions.data_as_of)}</span></span>
@@ -375,7 +391,7 @@ export default function App() {
           status={assignments.get(selectedBin)}
           onStatusChange={(s) => assignments.set(selectedBin, s)}
           onOpenModelCard={() => setModelCardOpen(true)}
-          onClose={() => setPanelOpen(false)}
+          onClose={closePanel}
         />
       )}
 

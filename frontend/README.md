@@ -86,6 +86,17 @@ renders the scored buildings.
 - **761–1100 px:** the sidebar becomes a drawer (☰) and closes automatically when a building opens.
 - **760 px and below:** the building panel becomes a bottom sheet.
 
+**Demo camera.** `Play demo` explicitly starts the original PR #3's smooth 30-second camera tour:
+wide approach, priority-color reveal, flight to the top-ranked building, evidence orbit and pullback.
+The current responsive panel framing is retained. `Play without camera animation` runs the same
+sequence using instant cuts. Ordinary search/reset navigation continues to respect the system's
+Reduce Motion setting; Stop, Escape, or interacting with the map interrupts either demo mode.
+
+**Building selection.** Clicking a footprint, search result or shortlist entry highlights the building,
+flies to a panel-aware close-up, then makes a slow 90° orbit over 12 seconds. The highlight remains
+after the orbit. Dragging/zooming the map, Escape, closing the panel, Reset view, or starting a demo
+interrupts the motion. With Reduce Motion enabled, selection frames the building instantly without orbiting.
+
 ## Prediction file contracts
 
 Real predictions come from the sources listed under "Real data from IBM LinuxONE" below (live API, exported snapshot,

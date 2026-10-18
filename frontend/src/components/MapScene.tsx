@@ -146,6 +146,7 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
       onMouseDown={onUserInteract}
       onTouchStart={onUserInteract}
       onWheel={onUserInteract}
+      onMoveStart={(e) => { if (e.originalEvent) onUserInteract(); }}
       style={{ position: 'absolute', inset: 0 }}
     >
       <NavigationControl position="bottom-right" visualizePitch />
