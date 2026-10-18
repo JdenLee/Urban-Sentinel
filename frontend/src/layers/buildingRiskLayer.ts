@@ -3,6 +3,9 @@ import type { Layer } from '@deck.gl/core';
 import type { JoinedFeature, Priority } from '../types/predictions';
 import { FILTERED_COLOR, PRIORITY_COLOR, SELECTED_COLOR, UNSCORED_COLOR } from '../data/priority';
 import { featureCentroid } from '../data/joinByBin';
+import { landmarkFor } from '../data/landmarks';
+import { BUILDING_FACADE } from './BuildingFacadeExtension';
+import { landmarkLayers } from './landmarkLayer';
 
 type RGBA = [number, number, number, number];
 
@@ -11,6 +14,16 @@ const SCORED_NEUTRAL: RGBA = [96, 104, 122, 255];
 const COLOR_TRANSITION_MS = 1600;
 
 const MATERIAL = { ambient: 0.45, diffuse: 0.6, shininess: 24, specularColor: [70, 80, 110] as [number, number, number] };
+const ordinaryCache = new WeakMap<JoinedFeature[], JoinedFeature[]>();
+
+function ordinaryBuildings(features: JoinedFeature[]): JoinedFeature[] {
+  let ordinary = ordinaryCache.get(features);
+  if (!ordinary) {
+    ordinary = features.filter((f) => !landmarkFor(f.properties.bin)?.model);
+    ordinaryCache.set(features, ordinary);
+  }
+  return ordinary;
+}
 
 export interface BuildingLayerOptions {
   context: JoinedFeature[];
@@ -54,7 +67,8 @@ export function buildingRiskLayers(options: BuildingLayerOptions): Layer[] {
   const layers: Layer[] = [
     new GeoJsonLayer<JoinedFeature['properties']>({
       id: 'context-buildings',
-      data: context,
+      data: ordinaryBuildings(context),
+      extensions: [BUILDING_FACADE],
       extruded: true,
       filled: true,
       stroked: false,
@@ -68,7 +82,8 @@ export function buildingRiskLayers(options: BuildingLayerOptions): Layer[] {
     }),
     new GeoJsonLayer<JoinedFeature['properties']>({
       id: 'scored-buildings',
-      data: scored,
+      data: ordinaryBuildings(scored),
+      extensions: [BUILDING_FACADE],
       extruded: true,
       filled: true,
       stroked: false,
@@ -88,6 +103,7 @@ export function buildingRiskLayers(options: BuildingLayerOptions): Layer[] {
       new GeoJsonLayer<JoinedFeature['properties']>({
         id: 'external-highlight',
         data: [highlight.feature],
+        extensions: [BUILDING_FACADE],
         extruded: true,
         filled: true,
         stroked: false,
@@ -101,7 +117,7 @@ export function buildingRiskLayers(options: BuildingLayerOptions): Layer[] {
 
   const selected =
     (selectedBin ? scored.find((f) => f.properties.bin === selectedBin) : undefined) ?? highlight?.feature;
-  if (selected) {
+  if (selected && !landmarkFor(selected.properties.bin)?.model) {
     const top = selected.properties.height_m;
     layers.push(
       new GeoJsonLayer<JoinedFeature['properties']>({
@@ -118,16 +134,17 @@ export function buildingRiskLayers(options: BuildingLayerOptions): Layer[] {
         id: 'selected-beacon',
         data: [{ position: featureCentroid(selected) }],
         diskResolution: 24,
-        radius: 4 + 3 * pulse,
+        radius: 3.5 + 1.5 * pulse,
         extruded: true,
         getPosition: (d) => [d.position[0], d.position[1], top],
-        getElevation: 260,
-        getFillColor: [150, 255, 255, Math.round(70 + 60 * (1 - pulse))],
+        getElevation: 140,
+        getFillColor: [160, 240, 255, Math.round(40 + 20 * (1 - pulse))],
         material: false,
         pickable: false,
         parameters: { depthWriteEnabled: false },
       }),
     );
   }
+  layers.push(...landmarkLayers([...context, ...scored], selectedBin, (f) => riskColor(f, options)));
   return layers;
 }

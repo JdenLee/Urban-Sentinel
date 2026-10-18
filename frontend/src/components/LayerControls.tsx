@@ -17,7 +17,7 @@ function Toggle({ label, hint, checked, disabled, onChange }: {
   onChange: () => void;
 }) {
   return (
-    <label className={`toggle${disabled ? ' toggle--disabled' : ''}`}>
+    <label className={`toggle${disabled ? ' toggle--disabled' : ''}`} title={hint}>
       <input type="checkbox" role="switch" checked={checked} disabled={disabled} onChange={onChange} />
       <span className="toggle__track" aria-hidden>
         <span className="toggle__thumb" />
@@ -34,20 +34,21 @@ export function LayerControls(props: LayerControlsProps) {
   const { showRisk, showMovement, movementAvailable, demoRunning, onToggleRisk, onToggleMovement, onPlayDemo, onReset } = props;
   return (
     <div className="controls">
-      <Toggle label="Inspection priority" hint="Colour scored buildings by category" checked={showRisk} onChange={onToggleRisk} />
+      <Toggle label="Inspection priority" hint="Model scores" checked={showRisk} onChange={onToggleRisk} />
       <Toggle
         label="Satellite movement"
-        hint={movementAvailable ? 'InSAR line-of-sight velocity (own legend)' : 'Not in current prediction file'}
+        hint={movementAvailable ? 'Measured line-of-sight motion' : 'No movement data loaded'}
         checked={showMovement}
         disabled={!movementAvailable}
         onChange={onToggleMovement}
       />
       <div className="controls__buttons">
         <button type="button" className="btn btn--primary" onClick={onPlayDemo} disabled={demoRunning}>
-          <span aria-hidden>▶</span> {demoRunning ? 'Playing…' : 'Play Demo'}
+          <svg width="10" height="12" viewBox="0 0 10 12" fill="currentColor" aria-hidden="true"><path d="M1 1l8 5-8 5z" /></svg>
+          {demoRunning ? 'Playing…' : 'Play demo'}
         </button>
         <button type="button" className="btn" onClick={onReset}>
-          Reset View
+          Reset view
         </button>
       </div>
     </div>

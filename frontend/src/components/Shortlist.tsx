@@ -11,6 +11,7 @@ import {
   type SearchItem,
 } from '../data/shortlist';
 import { searchAddresses, type AddressMatch } from '../data/geosearch';
+import { buildingName, searchLandmarks } from '../data/landmarks';
 
 export interface ShortlistProps {
   scored: JoinedFeature[];
@@ -58,20 +59,22 @@ function useAddressSearch(query: string): AddressSearch {
 
 export interface SearchBoxProps {
   scored: JoinedFeature[];
+  features?: JoinedFeature[];
   /** A scored building already in the scene. */
   onSelect: (bin: string) => void;
   /** Any other NYC building, from an address suggestion or a typed BIN. */
   onLookup: (target: LookupTarget) => void;
 }
 
-export function SearchBox({ scored, onSelect, onLookup }: SearchBoxProps) {
+export function SearchBox({ scored, features = scored, onSelect, onLookup }: SearchBoxProps) {
   const [q, setQ] = useState('');
   const [active, setActive] = useState(0);
   const local = useMemo(() => searchScored(scored, q, 5), [scored, q]);
+  const landmarks = useMemo(() => searchLandmarks(features, q), [features, q]);
   const addresses = useAddressSearch(q);
-  const results = useMemo(() => combineSearchResults(local, addresses.results, q), [local, addresses.results, q]);
+  const results = useMemo(() => combineSearchResults(local, addresses.results, q, 10, landmarks), [local, addresses.results, q, landmarks]);
   const choose = (item: SearchItem) => {
-    if (item.kind === 'scored') onSelect(item.bin);
+    if (item.kind === 'scored' || item.kind === 'landmark') onSelect(item.bin);
     else if (item.kind === 'address') onLookup({ bin: item.bin, label: item.label, lonLat: item.match.lonLat });
     else onLookup({ bin: item.bin, label: null, lonLat: null });
     setQ('');
@@ -87,8 +90,8 @@ export function SearchBox({ scored, onSelect, onLookup }: SearchBoxProps) {
       <input
         type="search"
         className="search__input"
-        placeholder="Search any NYC address or BIN"
-        aria-label="Search buildings by address or BIN"
+        placeholder="Search landmark, address or BIN"
+        aria-label="Search buildings by name, address or BIN"
         value={q}
         onChange={(e) => {
           setQ(e.target.value);
@@ -115,7 +118,7 @@ export function SearchBox({ scored, onSelect, onLookup }: SearchBoxProps) {
                 onMouseEnter={() => setActive(i)}
                 onClick={() => choose(item)}
               >
-                {item.kind === 'scored' ? (
+                {(item.kind === 'scored' || item.kind === 'landmark') && item.feature.properties.prediction ? (
                   <span
                     className="swatch swatch--sm"
                     style={{ background: rgbCss(PRIORITY_COLOR[item.feature.properties.prediction!.priority]) }}
@@ -181,7 +184,7 @@ export function Shortlist(props: ShortlistProps) {
               >
                 <span className="toplist__rank mono">{p.rank}</span>
                 <span className="swatch swatch--sm" style={{ background: rgbCss(PRIORITY_COLOR[p.priority]) }} />
-                <span className="toplist__addr">{f.properties.address ?? `BIN ${f.properties.bin}`}</span>
+                <span className="toplist__addr">{buildingName(f.properties.bin, f.properties.address)}</span>
                 {st !== 'unassigned' ? (
                   <span className={`status-tag status-tag--${st}`}>{ASSIGNMENT_LABEL[st]}</span>
                 ) : (

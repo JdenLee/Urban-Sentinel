@@ -1,12 +1,13 @@
 import { useEffect, useRef } from 'react';
 import type { PredictionSet } from '../types/predictions';
 import { PRIORITY_RANGE } from '../data/priority';
+import type { PredictionSource } from '../config';
 import { formatDate } from '../data/formatDate';
 
 const fmtDate = formatDate;
 
 /** Model card: what the score means, how it was validated, and its limits. */
-export function ModelCardDialog({ predictions, onClose }: { predictions: PredictionSet; onClose: () => void }) {
+export function ModelCardDialog({ predictions, source, onClose }: { predictions: PredictionSet; source: PredictionSource; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const d = ref.current;
@@ -16,12 +17,13 @@ export function ModelCardDialog({ predictions, onClose }: { predictions: Predict
   const isMock = data_mode === 'mock';
 
   return (
-    <dialog ref={ref} className="modal" onClose={onClose} onClick={(e) => e.target === ref.current && onClose()}>
+    <dialog ref={ref} className="modal" aria-labelledby="model-dialog-title" onClose={onClose} onClick={(e) => e.target === ref.current && onClose()}>
       <div className="modal__inner">
         <header className="modal__head">
           <div>
-            <div className="eyebrow">Model card</div>
-            <h2 className="modal__title">{model.name}</h2>
+            <div className="eyebrow">Urban Sentinel / Methodology</div>
+            <h2 id="model-dialog-title" className="modal__title">Data &amp; model</h2>
+            <p className="muted small">{model.name}</p>
           </div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="Close model card">
             ×
@@ -67,6 +69,14 @@ export function ModelCardDialog({ predictions, onClose }: { predictions: Predict
         <section>
           <h3 className="section-title">Provenance</h3>
           <dl className="kv">
+            <div className="kv__row">
+              <dt>Prediction source</dt>
+              <dd>{source.label}</dd>
+            </div>
+            <div className="kv__row">
+              <dt>Source location</dt>
+              <dd className="mono provenance-url">{source.url}</dd>
+            </div>
             <div className="kv__row">
               <dt>Model version</dt>
               <dd className="mono">{model.version}</dd>

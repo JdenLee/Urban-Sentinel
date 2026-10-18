@@ -14,6 +14,7 @@ import { PRIORITY_COLOR, PRIORITY_LABEL, SELECTED_COLOR, rgbCss } from '../data/
 import { ASSIGNMENT_LABEL, ASSIGNMENT_STATUSES, type AssignmentStatus } from '../data/shortlist';
 import { RECORD_TYPES } from '../data/loadHistory';
 import { LiveRescore } from './LiveRescore';
+import { buildingName, landmarkFor } from '../data/landmarks';
 
 const FACTOR_LABELS: Record<string, { label: string; unit?: string }> = {
   sar_velocity_mm_year: { label: 'LOS velocity', unit: 'mm/yr' },
@@ -82,6 +83,7 @@ export function BuildingPanel(props: BuildingPanelProps) {
   const active = tabs.includes(tab) ? tab : tabs[0];
   const data = history.status === 'ready' ? history.data : null;
   const address = feature?.properties.address ?? data?.address ?? p?.address ?? fallbackTitle ?? 'Address unavailable';
+  const landmark = landmarkFor(bin);
   const onRecord = data?.fisp?.statusOnRecord ?? null;
 
   return (
@@ -92,15 +94,16 @@ export function BuildingPanel(props: BuildingPanelProps) {
             {eyebrowFor(p, history, total, rankScope)}
             {p && rankScope === 'area' && p.rank > 0 && p.rank <= capacity && <span className="within-cap">Within capacity</span>}
           </div>
-          <h2 className="building-panel__title">{address}</h2>
+          <h2 className="building-panel__title">{buildingName(bin, address)}</h2>
+          {landmark && <p className="building-panel__address">{landmark.address}</p>}
           <div className="building-panel__bin">
             BIN <span className="mono">{bin}</span>
             {data?.borough ? <> · {data.borough}</> : null}
-            {feature?.properties.year_built ? <> · Built {feature.properties.year_built}</> : null}
+            {(landmark?.completed ?? feature?.properties.year_built) ? <> · Built {landmark?.completed ?? feature?.properties.year_built}</> : null}
             {feature && (
               <>
                 {' · '}
-                {feature.properties.height_estimated ? 'Height unknown' : `${Math.round(feature.properties.height_m)} m`}
+                {landmark?.architecturalHeight ? `${landmark.architecturalHeight.toFixed(0)} m incl. spire` : feature.properties.height_estimated ? 'Height unknown' : `${Math.round(feature.properties.height_m)} m`}
               </>
             )}
             {onRecord && (
@@ -133,9 +136,16 @@ export function BuildingPanel(props: BuildingPanelProps) {
       )}
 
       <div className="building-panel__body" role="tabpanel">
+        {!p && (
+          <section className="coverage-notice">
+            <h3 className="section-title">No model score available</h3>
+            <p>This building is mapped, but no prediction is available in the loaded data. Unscored does not mean low risk.</p>
+          </section>
+        )}
         {active === 'overview' && p && <OverviewTab {...props} p={p} color={color} />}
         {active === 'evidence' && p && <EvidenceTab p={p} />}
         {active === 'history' && <HistoryTab p={p} history={history} color={color} />}
+        {landmark && <p className="landmark-source"><a href={landmark.source} target="_blank" rel="noreferrer">About this landmark ↗</a></p>}
       </div>
 
       <footer className="building-panel__foot">
@@ -155,6 +165,7 @@ export function BuildingPanel(props: BuildingPanelProps) {
           Decision-support tool; field inspection required. Ranks buildings for review — not a structural simulation or
           a prediction of failure.
         </p>
+        <p className="geometry-note">{landmark?.model ? 'Illustrative landmark model. Façade detail is approximate.' : 'Building shapes and close-up façade details are approximate.'}</p>
       </footer>
     </aside>
   );
@@ -281,11 +292,11 @@ function HistoryNotice({ history }: { history: HistoryState }) {
   if (history.status === 'unavailable') {
     return (
       <p className="notice">
-        Full building history needs the ML API. Start it and set <code>VITE_API_URL</code> (see frontend/README.md).
+        Building history is unavailable. You can still explore the map and available scores.
       </p>
     );
   }
-  if (history.status === 'error') return <p className="error-text">{history.message}</p>;
+  if (history.status === 'error') return <p className="notice">Building history could not be loaded right now. Available map data is still shown.</p>;
   return null;
 }
 

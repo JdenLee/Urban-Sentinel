@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import type { CameraStop } from '../camera';
+import { prefersReducedMotion } from '../camera';
 
 export const DEMO_DURATION_MS = 30_000;
-const PANEL_PADDING = { top: 40, bottom: 40, left: 40, right: 420 };
 const NO_PADDING = { top: 0, bottom: 0, left: 0, right: 0 };
+
+export function demoPadding(width: number, height: number) {
+  if (width <= 760) return { top: 60, bottom: Math.round(height * 0.58), left: 20, right: 20 };
+  return { top: 76, bottom: 64, left: width > 1100 ? 332 : 24, right: width > 1100 ? 412 : 372 };
+}
+
+const duration = (ms: number) => prefersReducedMotion() ? 0 : ms;
 
 export interface DemoTarget {
   bin: string;
@@ -29,9 +36,9 @@ export interface DemoStep {
   run: (a: DemoActions) => void;
 }
 
-const START: CameraStop = { center: [-73.99, 40.7], zoom: 12.3, pitch: 25, bearing: -12 };
-const APPROACH: CameraStop = { center: [-74.004, 40.712], zoom: 14.5, pitch: 58, bearing: 24 };
-const FINALE: CameraStop = { center: [-74.0005, 40.7165], zoom: 14.25, pitch: 62, bearing: 8 };
+const START: CameraStop = { center: [-74.006, 40.704], zoom: 13.0, pitch: 40, bearing: -18 };
+const APPROACH: CameraStop = { center: [-74.004, 40.712], zoom: 14.45, pitch: 56, bearing: 8 };
+const FINALE: CameraStop = { center: [-74.0005, 40.7165], zoom: 14.25, pitch: 56, bearing: 22 };
 
 const smooth = (t: number) => t * t * (3 - 2 * t);
 
@@ -47,7 +54,7 @@ export function demoTimeline(): DemoStep[] {
         setSelectedBin(null);
         setPanelOpen(false);
         map.jumpTo({ ...START, padding: NO_PADDING });
-        map.flyTo({ ...APPROACH, duration: 5000, curve: 1.25, essential: true });
+        map.flyTo({ ...APPROACH, duration: duration(5000), curve: 1.15, essential: false });
       },
     },
     {
@@ -55,7 +62,7 @@ export function demoTimeline(): DemoStep[] {
       stage: 'Inspection-priority scores',
       run: ({ map, setShowRisk }) => {
         setShowRisk(true);
-        map.easeTo({ bearing: APPROACH.bearing + 22, zoom: APPROACH.zoom + 0.35, duration: 5000, easing: smooth, essential: true });
+        map.easeTo({ bearing: APPROACH.bearing + 12, zoom: APPROACH.zoom + 0.25, duration: duration(4800), easing: smooth, essential: false });
       },
     },
     {
@@ -63,33 +70,32 @@ export function demoTimeline(): DemoStep[] {
       stage: 'Highest-priority building',
       run: ({ map, target, setSelectedBin, later }) => {
         if (!target) return;
-        const zoom = target.height_m > 120 ? 16.1 : 16.7;
-        map.flyTo({ center: target.center, zoom, pitch: 63, bearing: 78, duration: 5500, curve: 1.4, essential: true });
+        const zoom = target.height_m > 120 ? 15.8 : 16.25;
+        map.flyTo({ center: target.center, zoom, pitch: 60, bearing: 36, duration: duration(5500), curve: 1.15, essential: false });
         later(() => setSelectedBin(target.bin), 4200);
       },
     },
     {
       at: 17_000,
-      stage: 'Warning factors & movement history',
+      stage: 'The evidence behind the priority',
       run: ({ map, target, setPanelOpen }) => {
         setPanelOpen(true);
         if (!target) return;
         map.easeTo({
           center: target.center,
-          bearing: 104,
-          padding: PANEL_PADDING,
-          duration: 7000,
+          bearing: 48,
+          padding: demoPadding(map.getContainer().clientWidth, map.getContainer().clientHeight),
+          duration: duration(6000),
           easing: smooth,
-          essential: true,
+          essential: false,
         });
       },
     },
     {
       at: 24_000,
-      stage: 'Satellite-derived movement',
-      run: ({ map, setShowMovement }) => {
-        setShowMovement(true);
-        map.flyTo({ ...FINALE, padding: PANEL_PADDING, duration: 5800, curve: 1.2, essential: true });
+      stage: 'From evidence to inspection priorities',
+      run: ({ map }) => {
+        map.flyTo({ ...FINALE, padding: demoPadding(map.getContainer().clientWidth, map.getContainer().clientHeight), duration: duration(5800), curve: 1.15, essential: false });
       },
     },
   ];
@@ -100,13 +106,13 @@ export function useDemoRunner(getActions: () => Omit<DemoActions, 'later'> | nul
   const [elapsed, setElapsed] = useState(0);
   const [stage, setStage] = useState('');
   const timers = useRef<number[]>([]);
-  const raf = useRef(0);
+  const clock = useRef<number | undefined>(undefined);
   const runningRef = useRef(false);
 
   const clear = () => {
     timers.current.forEach((t) => window.clearTimeout(t));
     timers.current = [];
-    cancelAnimationFrame(raf.current);
+    window.clearInterval(clock.current);
   };
 
   const stop = useCallback(() => {
@@ -138,15 +144,15 @@ export function useDemoRunner(getActions: () => Omit<DemoActions, 'later'> | nul
     schedule(() => {
       runningRef.current = false;
       setRunning(false);
-      cancelAnimationFrame(raf.current);
+      window.clearInterval(clock.current);
+      setElapsed(DEMO_DURATION_MS);
     }, DEMO_DURATION_MS);
 
     const t0 = performance.now();
-    const tick = (t: number) => {
-      setElapsed(Math.min(DEMO_DURATION_MS, t - t0));
-      if (runningRef.current) raf.current = requestAnimationFrame(tick);
-    };
-    raf.current = requestAnimationFrame(tick);
+    // Only the text clock needs React updates. The progress line animates in CSS.
+    clock.current = window.setInterval(() => {
+      if (runningRef.current) setElapsed(Math.min(DEMO_DURATION_MS, performance.now() - t0));
+    }, 1000);
   }, [getActions]);
 
   useEffect(() => clear, []);
@@ -164,7 +170,6 @@ export interface DemoControllerProps {
 /** Progress strip shown along the bottom while Demo Mode runs. */
 export function DemoController({ running, elapsed, stage, onStop }: DemoControllerProps) {
   if (!running) return null;
-  const pct = (elapsed / DEMO_DURATION_MS) * 100;
   return (
     <div className="demo-strip" role="status" aria-live="polite">
       <div className="demo-strip__row">
@@ -177,7 +182,7 @@ export function DemoController({ running, elapsed, stage, onStop }: DemoControll
         </button>
       </div>
       <div className="demo-strip__track">
-        <div className="demo-strip__fill" style={{ width: `${pct}%` }} />
+        <div className="demo-strip__fill" style={{ animationDuration: `${DEMO_DURATION_MS}ms` }} />
       </div>
     </div>
   );

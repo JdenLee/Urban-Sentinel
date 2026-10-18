@@ -1,28 +1,19 @@
 import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react';
-import Map, { NavigationControl, useControl, type MapRef } from 'react-map-gl/maplibre';
-import { MapboxOverlay, type MapboxOverlayProps } from '@deck.gl/mapbox';
-import type { PickingInfo } from '@deck.gl/core';
+import Map, { NavigationControl, type MapRef } from 'react-map-gl/maplibre';
+import { AmbientLight, DirectionalLight, LightingEffect, type PickingInfo } from '@deck.gl/core';
 import type { StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { DataMode, JoinedFeature, JoinResult, Priority } from '../types/predictions';
 import { buildingRiskLayers } from '../layers/buildingRiskLayer';
 import { movementHexagonLayer, movementPoints, type MovementPointDatum } from '../layers/movementHexagonLayer';
 import { PRIORITY_LABEL } from '../data/priority';
-import { DEMO_BBOX, INITIAL_VIEW } from '../camera';
+import { INITIAL_VIEW } from '../camera';
+import { adaptBasemapStyle } from '../data/basemapStyle';
+import { CinematicOverlay } from './CinematicOverlay';
+import { buildingName, landmarkFor } from '../data/landmarks';
+import { pickedBuilding } from '../layers/landmarkLayer';
 
 export const BASEMAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
-
-function DeckGLOverlay(props: MapboxOverlayProps) {
-  const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
-  overlay.setProps(props);
-  return null;
-}
-
-const [W, S, E, N] = DEMO_BBOX;
-const DEMO_AREA_POLYGON = {
-  type: 'Polygon' as const,
-  coordinates: [[[W, S], [E, S], [E, N], [W, N], [W, S]]],
-};
 
 /** Dark background-only style used if the basemap cannot be fetched; the scored overlay still renders. */
 const FALLBACK_STYLE: StyleSpecification = {
@@ -30,37 +21,6 @@ const FALLBACK_STYLE: StyleSpecification = {
   sources: {},
   layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#070a12' } }],
 };
-
-/**
- * Adapt the OpenFreeMap dark style: drop sprite-pattern fills it does not ship, hide its flat
- * building fills and add generic 3D context buildings outside the scored demo area.
- */
-export function adaptBasemapStyle(style: StyleSpecification): StyleSpecification {
-  const vectorSource = Object.entries(style.sources).find(([, s]) => s.type === 'vector')?.[0];
-  const layers = style.layers
-    .filter((l) => !(l.type === 'fill' && l.paint && 'fill-pattern' in l.paint))
-    .map((l) =>
-      'source-layer' in l && l['source-layer'] === 'building' ? { ...l, layout: { ...l.layout, visibility: 'none' as const } } : l,
-    );
-  if (vectorSource) {
-    const firstSymbol = layers.findIndex((l) => l.type === 'symbol');
-    layers.splice(firstSymbol < 0 ? layers.length : firstSymbol, 0, {
-      id: 'context-3d-buildings',
-      source: vectorSource,
-      'source-layer': 'building',
-      type: 'fill-extrusion',
-      minzoom: 12,
-      filter: ['!', ['within', DEMO_AREA_POLYGON]],
-      paint: {
-        'fill-extrusion-color': '#1a2030',
-        'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 10],
-        'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
-        'fill-extrusion-opacity': 0.9,
-      },
-    });
-  }
-  return { ...style, layers };
-}
 
 function useBasemapStyle(onError: (message: string) => void) {
   const [style, setStyle] = useState<StyleSpecification | null>(null);
@@ -126,19 +86,11 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
     [externalMovement, join, dataMode],
   );
 
-  // Gentle pulse for the selection beacon; stops when nothing is selected.
-  const [pulse, setPulse] = useState(0);
-  useEffect(() => {
-    if (!selectedBin) return;
-    let raf = 0;
-    const start = performance.now();
-    const tick = (t: number) => {
-      setPulse((Math.sin(((t - start) / 1400) * Math.PI * 2) + 1) / 2);
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [selectedBin]);
+  const effects = useMemo(() => [new LightingEffect({
+    ambient: new AmbientLight({ color: [225, 235, 255], intensity: 1.0 }),
+    key: new DirectionalLight({ color: [255, 245, 230], intensity: 1.0, direction: [-3, -5, -4] }),
+    fill: new DirectionalLight({ color: [165, 200, 255], intensity: 0.35, direction: [3, 1, -2] }),
+  })], []);
 
   const layers = useMemo(
     () => [
@@ -150,30 +102,30 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
         selectedBin,
         visiblePriorities,
         capacityCutoff,
-        pulse,
+        pulse: 0.4,
         highlight,
       }),
     ],
-    [points, showMovement, hexRadius, context, join.scored, showRisk, selectedBin, visiblePriorities, capacityCutoff, pulse, highlight],
+    [points, showMovement, hexRadius, context, join.scored, showRisk, selectedBin, visiblePriorities, capacityCutoff, highlight],
   );
 
   const onClick = useCallback(
     (info: PickingInfo) => {
-      const f = info.object as JoinedFeature | undefined;
+      const f = pickedBuilding(info.object);
       onSelect(f ? f.properties.bin : null);
     },
     [onSelect],
   );
 
   const getTooltip = useCallback((info: PickingInfo) => {
-    const f = info.object as JoinedFeature | undefined;
+    const f = pickedBuilding(info.object);
     if (!f) return null;
     const p = f.properties.prediction;
     const head = p ? `#${p.rank} · ${PRIORITY_LABEL[p.priority]}` : 'Not scored · click for history';
     return {
       html: `<div class="tt-rank">${head}</div><div class="tt-addr">${escapeHtml(
-        f.properties.address ?? `BIN ${f.properties.bin}`,
-      )}</div>`,
+        buildingName(f.properties.bin, f.properties.address),
+      )}</div>${landmarkFor(f.properties.bin) ? `<div class="tt-address">${escapeHtml(landmarkFor(f.properties.bin)!.address)}</div>` : ''}`,
       className: 'deck-tooltip',
       style: { background: 'none', padding: '0', color: 'inherit' },
     };
@@ -197,7 +149,7 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
       style={{ position: 'absolute', inset: 0 }}
     >
       <NavigationControl position="bottom-right" visualizePitch />
-      <DeckGLOverlay interleaved layers={layers} onClick={onClick} getTooltip={getTooltip} />
+      <CinematicOverlay interleaved layers={layers} effects={effects} onClick={onClick} getTooltip={getTooltip} />
     </Map>
   );
 });
