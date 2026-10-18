@@ -6,7 +6,7 @@ import { joinByBin } from './joinByBin';
 import { parsePredictions } from './loadPredictions';
 import { combineSearchResults } from './shortlist';
 import { oneWtcGeometry, WTC_ROOF_M, WTC_SPIRE_M } from './landmarkGeometry';
-import { pickedBuilding } from '../layers/landmarkLayer';
+import { landmarkLayers, pickedBuilding } from '../layers/landmarkLayer';
 
 const read = (name: string) => JSON.parse(readFileSync(new URL(`../../public/data/${name}`, import.meta.url), 'utf8'));
 const buildings = parseBuildings(read('buildings-demo.geojson'));
@@ -55,5 +55,15 @@ describe('illustrative One WTC geometry', () => {
     expect(pickedBuilding(g.faces[0])).toBe(wtc);
     expect(pickedBuilding(wtc)).toBe(wtc);
     expect(pickedBuilding({ unrelated: true })).toBeUndefined();
+  });
+
+  it('visibly highlights an unscored landmark without changing its prediction or picking identity', () => {
+    const neutral = landmarkLayers([wtc], null, () => [255, 0, 0, 255])[0];
+    const selected = landmarkLayers([wtc], wtc.properties.bin, () => [255, 0, 0, 255])[0];
+    const face = oneWtcGeometry(wtc).faces[0];
+    const color = (layer: typeof selected) => (layer.props as unknown as { getFillColor: (datum: typeof face) => number[] }).getFillColor(face);
+    expect(color(selected)).not.toEqual(color(neutral));
+    expect(wtc.properties.prediction).toBeNull();
+    expect(pickedBuilding(face)?.properties.bin).toBe(wtc.properties.bin);
   });
 });
