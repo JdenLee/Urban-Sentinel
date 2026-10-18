@@ -48,6 +48,13 @@ export const PRIORITY_COLOR: Record<Priority, RGB> = {
   critical: [255, 46, 64],
 };
 export const UNSCORED_COLOR: RGB = [52, 60, 78];
+/** Results already recorded this cycle: muted, so they read as "on file" rather than as predictions. */
+export const RECORDED_COLOR: Record<string, RGB> = {
+  UNSAFE: [150, 64, 72],
+  SWARMP: [150, 128, 70],
+  SAFE: [82, 112, 128],
+};
+export const RECORDED_ORDER = ['UNSAFE', 'SWARMP', 'SAFE'] as const;
 /** Scored buildings hidden by a filter or capacity cutoff. */
 export const FILTERED_COLOR: RGB = [70, 78, 96];
 export const SELECTED_COLOR: RGB = [180, 255, 255];

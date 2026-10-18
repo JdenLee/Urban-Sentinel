@@ -14,11 +14,23 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .config import CYCLE_START, DATA_DIR, OUTPUT_DIR, REPORTS_DIR
+from .config import CYCLE_START, DATA_DIR, OUTPUT_DIR, REPO_ROOT, REPORTS_DIR
 
 # Frontend demo area (bounds of frontend/public/data/buildings-demo.geojson, Lower Manhattan).
 LOWER_MANHATTAN_BBOX = (-74.0191, 40.7004, -73.9716, 40.7351)
 GROUND_MOTION_FILE = OUTPUT_DIR / "insar_ground_motion.geojson"
+DEFAULT_FOOTPRINTS = REPO_ROOT / "frontend" / "public" / "data" / "buildings-demo.geojson"
+
+
+def map_coverage(scores: dict, footprints_path) -> dict | None:
+    """Coverage reasons for the map's footprints (None if the footprint file is absent)."""
+    if not footprints_path or not Path(footprints_path).exists():
+        return None
+    from .config import cycle_at
+    from .coverage import classify, footprint_bins
+    from .ingest import load_facades
+    now = pd.Timestamp(scores["meta"]["as_of"])
+    return classify(load_facades(), {r["bin"]: r for r in scores["buildings"]}, footprint_bins(footprints_path), cycle_at(now))
 BACKTEST_FILE = OUTPUT_DIR / "cycle9_backtest.json"
 
 
@@ -70,8 +82,19 @@ def ground_motion_meta() -> dict | None:
             "period_end": meta.get("observation_end", "2020-02-14"), "metadata": meta}
 
 
-def frontend_payload(records: list[dict], score_meta: dict, bbox=LOWER_MANHATTAN_BBOX) -> dict:
-    area = [r for r in records if r["prediction"] and in_bbox(r, bbox)]
+def frontend_payload(records: list[dict], score_meta: dict, bbox=LOWER_MANHATTAN_BBOX, coverage: dict | None = None) -> dict:
+    """`coverage` (coverage.classify over the map's footprints) adds buildings that have a footprint but no PLUTO
+    location, same-building alias footprints, recorded outcomes for buildings already filed this cycle, and a
+    reason for every footprint left unscored."""
+    on_map = set(coverage["reasons"]) if coverage else set()
+    by_bin = {r["bin"]: r for r in records}
+    wanted = lambda r: in_bbox(r, bbox) or r["bin"] in on_map
+    area = [r for r in records if r["prediction"] and wanted(r)]
+    for fbin, filing_bin in (coverage or {}).get("aliases", {}).items():
+        src = by_bin.get(filing_bin)
+        if src is not None and src["prediction"]:
+            area.append({**src, "bin": fbin, "alias_of": filing_bin,
+                         "missing": [*src.get("missing", []), f"scored through façade filing BIN {filing_bin} on the same lot"]})
     area.sort(key=lambda r: r["prediction"]["rank"])
     buildings = []
     for i, r in enumerate(area, start=1):
@@ -93,6 +116,17 @@ def frontend_payload(records: list[dict], score_meta: dict, bbox=LOWER_MANHATTAN
         "meta": {k: score_meta[k] for k in ("label", "tiers", "caveats", "backtest_same_vantage")},
         "buildings": buildings,
     }
+    recorded = []
+    for r in records:
+        if r["prediction"] is None and r["fisp"].get("current_cycle_filed") and wanted(r):
+            last = (r["fisp"].get("history") or [{}])[-1]
+            recorded.append({"bin": r["bin"], "address": r.get("address"), "status": r["fisp"]["current_cycle_status"],
+                             "cycle": r["fisp"]["current_cycle"], "filed_on": last.get("filed_on"),
+                             "reference": last.get("reference")})
+    payload["recorded_buildings"] = recorded
+    if coverage:
+        unscored = {b: c for b, c in coverage["reasons"].items() if c not in ("scored", "alias")}
+        payload["coverage"] = {"counts": coverage["counts"], "labels": coverage["labels"], "reasons": unscored}
     gm = ground_motion_meta()
     if gm:
         payload["movement"] = gm
@@ -148,16 +182,18 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=str(OUTPUT_DIR / "linuxone-predictions.json"))
     ap.add_argument("--with-backtest", action="store_true", help="(re)compute the cycle-9 prediction-vs-actual layer")
+    ap.add_argument("--footprints", default=str(DEFAULT_FOOTPRINTS), help="map footprints GeoJSON (for coverage reasons)")
     args = ap.parse_args()
     if args.with_backtest or not BACKTEST_FILE.exists():
         BACKTEST_FILE.parent.mkdir(parents=True, exist_ok=True)
         BACKTEST_FILE.write_text(json.dumps(cycle9_backtest()))
     scores = json.loads((OUTPUT_DIR / "buildings_scores.json").read_text())
-    payload = frontend_payload(scores["buildings"], scores["meta"])
+    payload = frontend_payload(scores["buildings"], scores["meta"], coverage=map_coverage(scores, args.footprints))
     Path(args.out).write_text(json.dumps(payload, separators=(",", ":"), default=str))
     print(f"wrote {args.out}: {len(payload['buildings'])} buildings in area, platform "
           f"{payload['model']['execution_platform']}, backtest rows "
-          f"{len(payload.get('backtest_cycle9', {}).get('buildings', []))}, movement layer {'yes' if 'movement' in payload else 'no'}")
+          f"{len(payload.get('backtest_cycle9', {}).get('buildings', []))}, movement layer {'yes' if 'movement' in payload else 'no'}, "
+          f"recorded {len(payload['recorded_buildings'])}, coverage {payload.get('coverage', {}).get('counts')}")
 
 
 if __name__ == "__main__":

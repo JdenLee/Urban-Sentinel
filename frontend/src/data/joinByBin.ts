@@ -24,6 +24,8 @@ export function joinByBin(buildings: BuildingCollection, predictions: Prediction
         height_m: hasHeight ? h : DEFAULT_HEIGHT_M,
         height_estimated: !hasHeight,
         prediction,
+        recorded: prediction ? null : (predictions.recorded?.get(bin) ?? null),
+        unscoredReason: prediction ? null : (predictions.coverage?.reasons.get(bin) ?? null),
       },
     };
   });
