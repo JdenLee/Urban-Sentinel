@@ -88,6 +88,26 @@ renders the scored buildings.
 - **761–1100 px:** the sidebar becomes a drawer (☰) and closes automatically when a building opens.
 - **760 px and below:** the building panel becomes a bottom sheet.
 
+## Public demo (Vercel)
+
+Live at **https://urban-sentinel-bay.vercel.app**. The hosted site uses the committed LinuxONE snapshot
+(`public/data/linuxone-predictions.json`): the map, scores, explanations, search and aerial photos all work.
+It cannot reach the LinuxONE API, which is only available through the SSH tunnel, so "Recalculate on IBM Z"
+and full building history are local-only.
+
+To redeploy, run from the **repository root** (not `frontend/`). The Vercel project's root directory is
+`frontend`, and the build imports `ml/reports/linuxone/latency_s390x.json` from outside it:
+
+```bash
+vercel login                 # once
+vercel link --project urban-sentinel
+vercel deploy --prod
+```
+
+The root `.vercelignore` uploads only `frontend/` and that one evidence file. It also keeps every `.env*`
+file out, because `VITE_*` values are compiled into the public bundle. Do not add `VITE_GOOGLE_MAPS_KEY`
+to the Vercel project: every visitor's Street View image would bill to that key.
+
 ## Prediction file contracts
 
 Real predictions come from the sources listed under "Real data from IBM LinuxONE" below (live API, exported snapshot,
