@@ -8,6 +8,7 @@ import { RiskLegend } from './components/RiskLegend';
 import { SearchBox, Shortlist } from './components/Shortlist';
 import { MovementLegend } from './components/MovementLegend';
 import { ModelCardDialog } from './components/ModelCard';
+import { StatusStrip } from './components/StatusStrip';
 import { DemoController, useDemoRunner, type DemoTarget } from './components/DemoController';
 import { loadBuildings } from './data/loadBuildings';
 import { loadPredictionsWithFallback } from './data/loadPredictions';
@@ -39,9 +40,13 @@ type LoadState =
   | { status: 'error'; message: string }
   | { status: 'ready'; join: JoinResult; predictions: PredictionSet; source: PredictionSource; groundMotion: GroundMotionLayer | null };
 
-/** Below this width the sidebar and building panel cannot both fit beside the map. */
+/** Below this width the rail and the building dock cannot both sit beside the map. */
 const NARROW_QUERY = '(max-width: 1100px)';
 const isNarrow = () => typeof window !== 'undefined' && window.matchMedia?.(NARROW_QUERY).matches === true;
+
+/** Below this width the chassis stops docking and the rail and record overlay the map (chassis.css). */
+const OVERLAY_QUERY = '(max-width: 760px)';
+const isOverlay = () => typeof window !== 'undefined' && window.matchMedia?.(OVERLAY_QUERY).matches === true;
 
 /** A fetched footprint for a building outside the demo area, shaped like a scene feature. */
 function toJoined(f: BuildingFeature): JoinedFeature {
@@ -150,7 +155,11 @@ export default function App() {
       center,
       zoom: height > 300 ? 15.05 : height > 120 ? 15.7 : Math.max(map.getZoom(), 16.2),
       pitch: height > 300 ? 52 : 60,
-      padding: isNarrow() ? { top: height > 300 ? 140 : 40, bottom: 40, left: 20, right: 20 } : { top: height > 300 ? 200 : 40, bottom: 40, left: 340, right: 420 },
+      // The docked chassis already excludes the rail and the record from the viewport, so padding
+      // only has to leave headroom for a tall building. Overlaid, the record covers the lower 62%.
+      padding: isOverlay()
+        ? { top: height > 300 ? 120 : 32, bottom: Math.round(window.innerHeight * 0.62), left: 16, right: 16 }
+        : { top: height > 300 ? 170 : 40, bottom: 40, left: 28, right: 28 },
       duration: prefersReducedMotion() ? 0 : 2200,
     });
   }, []);
@@ -387,6 +396,16 @@ export default function App() {
       {modelCardOpen && <ModelCardDialog predictions={predictions} source={load.source} onClose={() => setModelCardOpen(false)} />}
 
       <DemoController running={demo.running} elapsed={demo.elapsed} stage={demo.stage} onStop={demo.stop} />
+
+      <StatusStrip
+        scored={join.scored.length}
+        mapped={join.features.length}
+        dataAsOf={predictions.data_as_of}
+        platform={predictions.model.execution_platform}
+        isMock={isMock}
+        selectedBin={selectedBin}
+        movementOn={movementOn}
+      />
 
       {basemapError && (
         <div className="toast" role="alert">

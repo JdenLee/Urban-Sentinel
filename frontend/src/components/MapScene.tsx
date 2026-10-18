@@ -16,6 +16,21 @@ import { pickedBuilding } from '../layers/landmarkLayer';
 
 export const BASEMAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
 
+/**
+ * The map is an inset viewport in the chassis, not a full-bleed backdrop. The frame publishes its
+ * insets as CSS variables so the rail and docks reserve real space rather than floating over the city.
+ */
+const VIEWPORT: React.CSSProperties = {
+  position: 'absolute',
+  top: 'var(--chassis-top, 0px)',
+  left: 'var(--chassis-left, 0px)',
+  right: 'var(--chassis-right, 0px)',
+  bottom: 'var(--chassis-bottom, 0px)',
+  // react-map-gl's container defaults to width/height 100%, which would win over right and bottom.
+  width: 'auto',
+  height: 'auto',
+};
+
 /** Dark background-only style used if the basemap cannot be fetched; the scored overlay still renders. */
 const FALLBACK_STYLE: StyleSpecification = {
   version: 8,
@@ -160,7 +175,7 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
       onMouseDown={onUserInteract}
       onTouchStart={onUserInteract}
       onWheel={onUserInteract}
-      style={{ position: 'absolute', inset: 0 }}
+      style={VIEWPORT}
     >
       <NavigationControl position="bottom-right" visualizePitch />
       <CinematicOverlay interleaved layers={layers} effects={effects} onClick={onClick} getTooltip={getTooltip} />

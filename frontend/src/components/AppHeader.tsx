@@ -20,7 +20,7 @@ export function AppHeader({ sidebarOpen, isMock, onToggleSidebar, onOpenModel }:
         <svg className="brand__mark" viewBox="0 0 34 34" fill="none" aria-hidden="true">
           <path d="M2 2h12v12H2zM20 2h12v12H20zM2 20h12v12H2z" stroke="currentColor" strokeWidth="1.5" />
           <path d="M20 20h12v12H20z" fill="currentColor" />
-          <path d="M25 25h2v2h-2z" fill="var(--paper)" />
+          <path d="M25 25h2v2h-2z" fill="var(--chassis)" />
         </svg>
         <div>
           <h1 className="title">Urban Sentinel</h1>

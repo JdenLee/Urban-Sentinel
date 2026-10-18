@@ -6,9 +6,14 @@ import { prefersReducedMotion } from '../camera';
 export const DEMO_DURATION_MS = 30_000;
 const NO_PADDING = { top: 0, bottom: 0, left: 0, right: 0 };
 
+/**
+ * Headroom inside the map viewport. Above 760px the chassis docks, so the viewport already excludes
+ * the rail and the building record and only the building itself needs framing; below that they
+ * overlay the map and the record covers the lower part of it.
+ */
 export function demoPadding(width: number, height: number) {
-  if (width <= 760) return { top: 60, bottom: Math.round(height * 0.58), left: 20, right: 20 };
-  return { top: 76, bottom: 64, left: width > 1100 ? 332 : 24, right: width > 1100 ? 412 : 372 };
+  if (width <= 760) return { top: 56, bottom: Math.round(height * 0.62), left: 20, right: 20 };
+  return { top: 72, bottom: 48, left: 28, right: 28 };
 }
 
 const duration = (ms: number) => prefersReducedMotion() ? 0 : ms;
