@@ -1,6 +1,6 @@
-# Cinematic frontend preview
+# Urban Sentinel visual preview
 
-This is an isolated visual polish proposal for the three-minute Urban Sentinel demonstration.
+This is an isolated visual polish proposal for the three-minute Urban Sentinel demonstration. The latest pass replaces the initial dark, glowing panels with a quiet field-map interface while retaining the cinematic camera sequence.
 
 ## Checkout and base
 
@@ -17,6 +17,10 @@ No team checkout, API implementation, ML pipeline, score contract, or deployment
 | --- | --- |
 | `frontend/src/components/CinematicOverlay.tsx` | Animate only the selected beacon; pause it when hidden or reduced motion is requested. |
 | `frontend/src/components/MapScene.tsx` | Stable city layers and directional lighting. |
+| `frontend/src/components/AppHeader.tsx` | Urban Sentinel wordmark, parcel symbol, region line, compact mobile header, and data-panel entry point. |
+| `frontend/src/components/ModelCard.tsx` | Source location and runtime provenance, an accessible dialog title, and literal training-cycle labels. |
+| `frontend/src/components/LayerControls.tsx` | Compact controls, explanatory accessible labels, and a consistent demo button. |
+| `frontend/index.html` | Project title, theme colour, and matching parcel favicon. |
 | `frontend/src/App.tsx` | Search all loaded landmark footprints and frame tall buildings with room for their spires. |
 | `frontend/src/components/BuildingPanel.tsx` | Landmark titles, addresses, sources, and clear unscored/history-unavailable states. |
 | `frontend/src/components/Shortlist.tsx` | Named landmark search and shortlist display. |
@@ -25,12 +29,12 @@ No team checkout, API implementation, ML pipeline, score contract, or deployment
 | `frontend/src/data/landmarkGeometry.ts` | Lightweight illustrative One WTC shape, façade bands, and spire. |
 | `frontend/src/data/landmarks.test.ts` | Identity, missing-score, search, geometry, and selection regression checks. |
 | `frontend/src/layers/BuildingFacadeExtension.ts` | GPU window-bay pattern that fades in at close zoom. |
-| `frontend/src/layers/landmarkLayer.ts` | Landmark geometry and labels with collision handling. |
+| `frontend/src/layers/landmarkLayer.ts` | Landmark geometry and labels with collision handling; anchors inside labels and expanded collision bounds reduce overlap. |
 | `frontend/src/data/basemapStyle.ts` | Suppress duplicate basemap buildings so scored roofs and walls remain visible. |
 | `frontend/src/data/basemapStyle.test.ts` | Regression checks for building occlusion and preserving other map layers. |
 | `frontend/src/components/DemoController.tsx` | Gentler 30-second camera sequence, responsive framing, CSS progress animation, and one-second React clock updates. |
 | `frontend/src/layers/buildingRiskLayer.ts` | Smaller, softer selection beacon. |
-| `frontend/src/visual-polish.css` | Panel contrast, typography, restrained glow, transitions, and control placement. |
+| `frontend/src/visual-polish.css` | Warm neutral panels, serif wordmark, compact legend, flat controls, fine rules, readable scores, responsive layout, and restrained motion. |
 | `frontend/src/main.tsx` | Load the isolated visual stylesheet after existing styles. |
 | `frontend/package.json`, `frontend/package-lock.json` | Add `@deck.gl/extensions` 9.4.0 (matching the installed deck.gl version) for label collision handling. |
 | `qa/VISUAL_PREVIEW.md` | Scope and validation notes. |
@@ -39,7 +43,7 @@ The automatic finale returns to the priority overview. Satellite movement remain
 
 ## Preview data and launch
 
-The preview uses the existing local prediction export copied to the ignored file `frontend/public/data/qa-preview.json`. That export reports `arm64`, not LinuxONE. The header preserves that provenance. It is not committed and is not a production fixture. The live API points to a deliberately unavailable local path, so history/live inference is not being validated here. Basemap tiles still require network access.
+The preview uses the existing local prediction export copied to the ignored file `frontend/public/data/qa-preview.json`. That export reports `arm64`, not LinuxONE. The sidebar footer and Data & model dialog preserve that provenance. It is not committed and is not a production fixture. The live API points to a deliberately unavailable local path, so history/live inference is not being validated here. Basemap tiles still require network access.
 
 ```sh
 cd frontend
@@ -61,7 +65,7 @@ VITE_API_URL=/qa-offline VITE_PREDICTIONS_URL=/data/qa-preview.json npm run dev 
 
 This proposal overlaps frontend presentation files in PR #6, so integrate it only after the frontend owner reviews the diff against their latest head. It deliberately keeps API/data changes out of the patch.
 
-Release QA findings remain separate: priority thresholds versus percentile categories, shortlist/map capacity alignment, the invalid trained-through date, request timeouts, and verification against the final LinuxONE export. A visual preview is not evidence those release gates have passed.
+Release QA findings remain separate: priority thresholds versus percentile categories, shortlist/map capacity alignment, request timeouts, and verification against the final LinuxONE export. The training-label display now preserves `FISP cycle 9` literally instead of parsing it as a date; this correction remains local until integrated. A visual preview is not evidence the other release gates have passed.
 
 Coverage remains the existing Lower Manhattan demo bounding box. Broader map coverage requires more prepared footprints and matching prediction exports; no geographic expansion is included. Removing duplicate basemap extrusions also leaves areas outside the prepared scene as a flat basemap unless an individual searched footprint is loaded.
 
@@ -80,3 +84,11 @@ The initial map extruded one simplified footprint to a single roof height. It co
 - The panel now explicitly explains an absent score and distinguishes it from low risk. Unscored One WTC stays neutral silver-gray; selection outlines it in cyan.
 
 Browser checks include finding One WTC with the `Freedom Tower` and `One WTC` aliases, displaying the unscored notice, finding Woolworth by name with its existing 0.3706 probability, and observing window bays on scored buildings at close zoom. Clicking the custom One WTC model opens BIN `1088469`, confirming that its faces resolve to the original building record. The final 30-second demo completed with the new layers, returned to the inspection overview, and produced no browser warnings or errors. Shader updates required a fresh page load during development; these final checks used a clean reload. This is still a local preview, not live LinuxONE/history validation or an FPS benchmark.
+
+## Original identity and clean interface follow-up
+
+The user requested a less generic interface. The current design uses a custom parcel mark, Urban Sentinel wordmark, New York City / Lower Manhattan region line, warm paper surfaces, and restrained forest-green controls. The previous glowing runtime/source pills are replaced by a single Data & model entry point. The dialog retains the actual source, URL, model version, execution platform, training window, timestamps, validation, and limitations. Mock mode remains explicitly marked in the header.
+
+The compact two-column priority legend leaves more room for the inspection shortlist. Building scores use dark tabular numerals with their original priority colour in the adjacent category tag and bar. Tabs, lists, notices, tooltips, and map controls use the same simple rules and small corner radii. No fonts, image assets, or new packages were added in this pass.
+
+Verified the desktop layout at 1280 × 720 and the mobile layout at 390 × 844, including drawer open/close, landmark search, automatic drawer closure on selection, and the building detail sheet. The narrow header stays on one row. The Data & model dialog displays the original `arm64` provenance and `FISP cycle 9` training label. The browser viewport was restored after testing.

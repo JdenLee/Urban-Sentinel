@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MapRef } from 'react-map-gl/maplibre';
 import { MapScene } from './components/MapScene';
+import { AppHeader } from './components/AppHeader';
 import { BuildingPanel } from './components/BuildingPanel';
 import { LayerControls } from './components/LayerControls';
 import { RiskLegend } from './components/RiskLegend';
@@ -29,7 +30,7 @@ import {
   type Priority,
 } from './types/predictions';
 
-export const APP_TITLE = 'NYC Façade Early-Warning System';
+export const APP_TITLE = 'Urban Sentinel';
 
 type LoadState =
   | { status: 'loading' }
@@ -315,49 +316,14 @@ export default function App() {
       />
       <div className="vignette" aria-hidden />
 
-      <header className="topbar">
-        <button
-          type="button"
-          className="icon-btn drawer-btn"
-          aria-label={sidebarOpen ? 'Hide controls' : 'Show controls'}
-          aria-expanded={sidebarOpen}
-          aria-controls="sidebar"
-          onClick={() => setSidebarOpen((v) => !v)}
-        >
-          <span aria-hidden>{sidebarOpen ? '‹' : '☰'}</span>
-        </button>
-        <div className="brand">
-          <h1 className="title">{APP_TITLE}</h1>
-          <p className="subtitle">Façade inspection priority · Lower Manhattan · data-driven, not a structural simulation</p>
-        </div>
-        <div className="badges">
-          {isMock ? (
-            <span className="badge badge--runtime" title="Mock predictions were not produced by the model">
-              Target runtime: {predictions.model.execution_platform}
-            </span>
-          ) : (
-            <span className="badge badge--ibm">
-              <span className="badge__dot" aria-hidden />
-              Predictions generated on {predictions.model.execution_platform}
-            </span>
-          )}
-          {!isMock && (
-            <span className="badge" title={load.source.url}>
-              Source: {load.source.label}
-            </span>
-          )}
-          {isMock && (
-            <span className="badge badge--mock" title="Synthetic demonstration values, not model output">
-              Mock data
-            </span>
-          )}
-          <button type="button" className="badge badge--btn" onClick={() => setModelCardOpen(true)}>
-            Model card
-          </button>
-        </div>
-      </header>
+      <AppHeader sidebarOpen={sidebarOpen} isMock={isMock}
+        onToggleSidebar={() => setSidebarOpen((v) => !v)} onOpenModel={() => setModelCardOpen(true)} />
 
       <aside id="sidebar" className="panel sidebar" aria-label="Map controls" hidden={!sidebarOpen}>
+        <div className="workspace-heading">
+          <span className="workspace-heading__label">Inspection desk</span>
+          <span className="workspace-heading__count mono">{join.scored.length.toLocaleString()} scored / {join.features.length.toLocaleString()} mapped</span>
+        </div>
         <SearchBox scored={join.scored} features={join.features} onSelect={(bin) => select(bin, true)} onLookup={lookup} />
         <LayerControls
           showRisk={showRisk}
@@ -385,30 +351,11 @@ export default function App() {
           onShortlistOnly={setShortlistOnly}
           onSelect={(bin) => select(bin, true)}
         />
-        <dl className="kv kv--tight sidebar__foot">
-          <div className="kv__row">
-            <dt>Data as of</dt>
-            <dd className="mono">{fmtDate(predictions.data_as_of)}</dd>
-          </div>
-          <div className="kv__row">
-            <dt>Model trained through</dt>
-            <dd className="mono">{fmtDate(predictions.model.trained_through)}</dd>
-          </div>
-          <div className="kv__row">
-            <dt>Last refresh</dt>
-            <dd className="mono">{fmtDate(predictions.generated_at)}</dd>
-          </div>
-          <div className="kv__row">
-            <dt>Model</dt>
-            <dd className="mono">{predictions.model.version}</dd>
-          </div>
-          <div className="kv__row">
-            <dt>Coverage</dt>
-            <dd className="mono">
-              {join.scored.length} / {join.features.length.toLocaleString()} bldgs
-            </dd>
-          </div>
-        </dl>
+        <div className="sidebar__foot">
+          <span>Data as of <span className="mono">{fmtDate(predictions.data_as_of)}</span></span>
+          <span>{isMock ? 'Synthetic demo data' : `Scored on ${predictions.model.execution_platform}`}</span>
+          <button type="button" className="text-link" onClick={() => setModelCardOpen(true)}>View sources &amp; methodology ↗</button>
+        </div>
       </aside>
 
       {movementOn && <MovementLegend meta={movementMeta} mode={predictions.data_mode} />}
@@ -432,7 +379,7 @@ export default function App() {
         />
       )}
 
-      {modelCardOpen && <ModelCardDialog predictions={predictions} onClose={() => setModelCardOpen(false)} />}
+      {modelCardOpen && <ModelCardDialog predictions={predictions} source={load.source} onClose={() => setModelCardOpen(false)} />}
 
       <DemoController running={demo.running} elapsed={demo.elapsed} stage={demo.stage} onStop={demo.stop} />
 

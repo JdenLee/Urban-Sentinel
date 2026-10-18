@@ -45,16 +45,18 @@ export function landmarkLayers(features: JoinedFeature[], selectedBin: string | 
   }
   layers.push(new TextLayer<JoinedFeature, CollisionFilterExtensionProps<JoinedFeature>>({
     id: 'landmark-names', data: landmarks,
-    getPosition: (f) => [...featureCentroid(f), displayHeight(f) + 10],
+    getPosition: (f) => [...featureCentroid(f), displayHeight(f) + 18],
     getText: (f) => landmarkFor(f.properties.bin)!.name,
-    getSize: 12, sizeUnits: 'pixels', getColor: [225, 236, 246, 255],
-    getTextAnchor: 'middle', getAlignmentBaseline: 'bottom', getPixelOffset: [0, -4],
-    fontFamily: 'Arial, sans-serif', fontWeight: 600, outlineWidth: 3, outlineColor: [6, 13, 22, 230],
+    getSize: 11, sizeUnits: 'pixels', getColor: [237, 237, 226, 255],
+    // Keep the collision anchor inside the label, with extra spacing at dense zooms.
+    getTextAnchor: 'middle', getAlignmentBaseline: 'center', getPixelOffset: [0, 0],
+    fontFamily: 'Arial, sans-serif', fontWeight: 500, outlineWidth: 1, outlineColor: [18, 26, 22, 255],
     fontSettings: { sdf: true }, billboard: true, pickable: true,
     characterSet: 'auto', extensions: [LABEL_COLLISIONS], collisionEnabled: true,
+    collisionTestProps: { sizeScale: 1.6 },
     getCollisionPriority: (f) => f.properties.bin === selectedBin ? 1000 : displayHeight(f),
     updateTriggers: { getCollisionPriority: [selectedBin] },
-    background: true, getBackgroundColor: [8, 17, 28, 205], backgroundPadding: [6, 4],
+    background: true, getBackgroundColor: [18, 26, 22, 235], backgroundPadding: [7, 5],
     parameters: { depthWriteEnabled: false },
   }));
   return layers;
