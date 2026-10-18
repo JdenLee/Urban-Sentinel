@@ -220,8 +220,9 @@ body { background: var(--void); font-size: 13px; }
 .score-meta__conf { font: 11px var(--mono); }
 
 .kv__row, .factors__row { border-bottom: 1px solid var(--rule); }
-.kv__row dd, .factors dd { overflow-wrap: anywhere; font: 11px var(--mono); }
-.kv dt, .factors dt { color: var(--muted); }
+/* A measure wraps between words but never inside one: "693,945" split across lines is a misread. */
+.kv__row dd, .factors dd { overflow-wrap: normal; font: 11px var(--mono); }
+.kv dt, .factors dt { color: var(--muted); min-width: 0; }
 .explanations { gap: 7px; font-size: 12px; line-height: 1.5; }
 .explanations li::marker { color: var(--accent); font-size: 10px; }
 .contrib__track { background: var(--chassis-sunk); border-radius: 0; }
