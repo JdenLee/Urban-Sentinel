@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_HEIGHT_M, joinByBin } from './joinByBin';
+import { FACADE_MATERIALS, isFacadeMaterial, materialIndex, storeyHeight } from './facadeMaterials';
+import { sunState } from './sunPosition';
 import { parseBuildings } from './loadBuildings';
 import { binString, parsePredictions } from './loadPredictions';
 import { normalisePriority, priorityFromScore, PRIORITY_RANGE } from './priority';
@@ -355,6 +357,60 @@ describe('committed demo data', () => {
     const bins = buildings.features.map((f) => f.properties.bin);
     expect(bins.every((b) => typeof b === 'string' && /^1\d{6}$/.test(b))).toBe(true);
     expect(new Set(bins).size).toBe(bins.length);
+  });
+
+  it('every footprint carries a façade material the shader can index', () => {
+    const features = buildings.features;
+    expect(features.every((f) => isFacadeMaterial(f.properties.material))).toBe(true);
+    // A meaningful share must come from inspectors' filings, not from era inference alone.
+    const filed = features.filter((f) => f.properties.material_source === 'filing');
+    expect(filed.length).toBeGreaterThan(1000);
+  });
+});
+
+describe('solar position', () => {
+  // Lower Manhattan, checked against published almanac figures for 10:00 local.
+  const nyc = (iso: string) => sunState(new Date(iso), 40.7066, -74.0113);
+
+  it('puts the winter sun low in the south-south-east', () => {
+    const s = nyc('2026-12-21T18:00:00Z');
+    expect(s.altitudeDeg).toBeCloseTo(20.6, 0);
+    expect(s.azimuthDeg).toBeCloseTo(152, 0);
+  });
+
+  it('puts the summer sun high in the east-south-east', () => {
+    const s = nyc('2026-06-21T18:00:00Z');
+    expect(s.altitudeDeg).toBeCloseTo(49.1, 0);
+    expect(s.azimuthDeg).toBeCloseTo(101, 0);
+  });
+
+  it('uses New York morning whatever zone the viewer is in', () => {
+    // Same New York day, requested from instants 12 hours apart.
+    const a = nyc('2026-06-21T05:00:00Z');
+    const b = nyc('2026-06-21T23:00:00Z');
+    expect(a.altitudeDeg).toBeCloseTo(b.altitudeDeg, 5);
+  });
+
+  it('keeps the city in daylight, so risk colours read the same at any hour', () => {
+    expect(nyc('2026-12-21T18:00:00Z').night).toBe(0);
+    expect(nyc('2026-06-21T18:00:00Z').night).toBe(0);
+  });
+});
+
+describe('façade materials', () => {
+  it('maps every material to a distinct shader index', () => {
+    const indices = FACADE_MATERIALS.map(materialIndex);
+    expect(indices).toEqual(FACADE_MATERIALS.map((_, i) => i));
+  });
+
+  it('derives storey height from the floor count when the ratio is plausible', () => {
+    expect(storeyHeight(60, 20, 'brick')).toBe(3);
+  });
+
+  it('falls back to the material default when PLUTO floors disagree with the roof height', () => {
+    // 12 m over 20 floors is 0.6 m per storey: the lot's floor count is not this building's.
+    expect(storeyHeight(12, 20, 'stone')).toBe(3.8);
+    expect(storeyHeight(30, null, 'curtain')).toBe(3.9);
   });
 });
 

@@ -6,9 +6,15 @@ import { prefersReducedMotion } from '../camera';
 export const DEMO_DURATION_MS = 30_000;
 const NO_PADDING = { top: 0, bottom: 0, left: 0, right: 0 };
 
-export function demoPadding(width: number, height: number) {
-  if (width <= 760) return { top: 60, bottom: Math.round(height * 0.58), left: 20, right: 20 };
-  return { top: 76, bottom: 64, left: width > 1100 ? 332 : 24, right: width > 1100 ? 412 : 372 };
+/**
+ * Headroom inside the map. The panels float over it, so the demo frames its subject into the strip
+ * they leave clear: the record card on the right, the desk on the left while it is open, and below
+ * 760px the record becomes a bottom sheet instead and the desk is already closed.
+ */
+export function demoPadding(width: number, height: number, deskOpen = false) {
+  if (width <= 760) return { top: 72, bottom: Math.round(height * 0.68), left: 24, right: 24 };
+  const rail = width <= 1100 ? 328 : 350;
+  return { top: 86, bottom: 70, left: deskOpen ? rail : 28, right: width <= 1100 ? 380 : 412 };
 }
 
 const duration = (ms: number) => prefersReducedMotion() ? 0 : ms;
@@ -22,6 +28,8 @@ export interface DemoTarget {
 export interface DemoActions {
   map: MapLibreMap;
   target: DemoTarget | null;
+  /** Read at the moment of framing: the desk can be closed by hand while the demo runs. */
+  deskOpen: () => boolean;
   setShowRisk: (v: boolean) => void;
   setShowMovement: (v: boolean) => void;
   setSelectedBin: (bin: string | null) => void;
@@ -78,13 +86,13 @@ export function demoTimeline(): DemoStep[] {
     {
       at: 17_000,
       stage: 'The evidence behind the priority',
-      run: ({ map, target, setPanelOpen }) => {
+      run: ({ map, target, deskOpen, setPanelOpen }) => {
         setPanelOpen(true);
         if (!target) return;
         map.easeTo({
           center: target.center,
           bearing: 48,
-          padding: demoPadding(map.getContainer().clientWidth, map.getContainer().clientHeight),
+          padding: demoPadding(map.getContainer().clientWidth, map.getContainer().clientHeight, deskOpen()),
           duration: duration(6000),
           easing: smooth,
           essential: false,
@@ -94,8 +102,8 @@ export function demoTimeline(): DemoStep[] {
     {
       at: 24_000,
       stage: 'From evidence to inspection priorities',
-      run: ({ map }) => {
-        map.flyTo({ ...FINALE, padding: demoPadding(map.getContainer().clientWidth, map.getContainer().clientHeight), duration: duration(5800), curve: 1.15, essential: false });
+      run: ({ map, deskOpen }) => {
+        map.flyTo({ ...FINALE, padding: demoPadding(map.getContainer().clientWidth, map.getContainer().clientHeight, deskOpen()), duration: duration(5800), curve: 1.15, essential: false });
       },
     },
   ];

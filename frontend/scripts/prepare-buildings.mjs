@@ -3,14 +3,19 @@
  * Prepare the demo building-footprint overlay.
  *
  * 1. Downloads NYC Building Footprints (NYC Open Data 5zhs-2jue) inside the demo bounding box,
- *    plus MapPLUTO addresses (64uk-42ks) for Manhattan. Raw responses are cached in .cache/.
+ *    MapPLUTO lot attributes (64uk-42ks) for Manhattan, and the exterior wall types recorded on
+ *    DOB NOW façade filings (xubg-57si). Raw responses are cached in .cache/.
  * 2. Treats BIN as a string (the API returns it as a number).
  * 3. Keeps only Manhattan BINs (1xxxxxx) inside the demo area.
- * 4. Keeps only bin, address, height_m and year_built.
+ * 4. Keeps bin, address, height_m, year_built, floors, and a façade material class.
  * 5. Converts roof height from feet to metres.
  * 6. Simplifies geometry with Douglas-Peucker at a sub-metre tolerance and rounds coordinates
  *    to 6 decimals (~0.1 m), which is invisible at street level.
  * 7. Writes public/data/buildings-demo.geojson.
+ *
+ * The material class drives the procedural façade shader. It is taken from the inspector-recorded
+ * wall type where a façade filing exists, and otherwise inferred from construction era and use,
+ * which `material_source` records so the map can say which is which.
  *
  * Usage: node scripts/prepare-buildings.mjs [--refresh]
  * Optional: --input path/to/footprints.geojson to read a local export instead of the API.
@@ -28,6 +33,7 @@ export const DEMO_BBOX = { north: 40.735, west: -74.022, south: 40.7, east: -73.
 
 const FOOTPRINTS_API = 'https://data.cityofnewyork.us/resource/5zhs-2jue.json';
 const PLUTO_API = 'https://data.cityofnewyork.us/resource/64uk-42ks.json';
+const FACADE_API = 'https://data.cityofnewyork.us/resource/xubg-57si.json';
 const PAGE = 5000;
 const FEET_TO_M = 0.3048;
 const SIMPLIFY_TOLERANCE_M = 0.25;
@@ -152,17 +158,25 @@ async function loadFootprints() {
   );
 }
 
-async function loadAddresses() {
-  console.log('Downloading MapPLUTO addresses for Manhattan (64uk-42ks)…');
+/** Lot attributes keyed by BBL: address plus the storey count and use class the shader needs. */
+async function loadLots() {
+  console.log('Downloading MapPLUTO lot attributes for Manhattan (64uk-42ks)…');
   const rows = await fetchAll(
     PLUTO_API,
-    { $select: 'bbl,address', $where: "borough = 'MN'", $order: 'bbl' },
+    { $select: 'bbl,address,numfloors,bldgclass,yearbuilt', $where: "borough = 'MN'", $order: 'bbl' },
     'pluto-mn.json',
   );
   const map = new Map();
   for (const r of rows) {
     const bbl = idString(r.bbl);
-    if (bbl && r.address) map.set(bbl, r.address.replace(/\s+/g, ' ').trim());
+    if (!bbl) continue;
+    const floors = Math.round(Number(r.numfloors));
+    map.set(bbl, {
+      address: r.address ? r.address.replace(/\s+/g, ' ').trim() : null,
+      floors: Number.isFinite(floors) && floors > 0 ? floors : null,
+      bldgclass: r.bldgclass ?? null,
+      yearbuilt: Number(r.yearbuilt) > 1700 ? Number(r.yearbuilt) : null,
+    });
   }
   return map;
 }
@@ -182,11 +196,82 @@ export function formatAddress(raw) {
   return titleCase(raw).replace(/^(\S+ (?:(?:East|West) )?)(\d+) (Avenue|Street|Place)\b/, (_, pre, n, kind) => `${pre}${ordinal(n)} ${kind}`);
 }
 
+/**
+ * Façade material classes rendered by the shader. Order matters: a filing lists several wall types
+ * ("BRICK MASONRY; TERRA COTTA"), and the first match wins, so the visually dominant cladding is
+ * listed before the structure behind it.
+ */
+const WALL_TYPE_MATCHERS = [
+  ['curtain', ['CURTAIN WALL', 'METAL & GLASS', 'GLASS']],
+  ['cast_iron', ['CAST IRON']],
+  ['terra_cotta', ['TERRA COTTA']],
+  ['stone', ['STONE', 'MARBLE', 'LIMESTONE', 'GRANITE']],
+  ['metal', ['METAL SIDING', 'METAL PANEL', 'ALUMINUM']],
+  ['stucco', ['STUCCO', 'EIFS']],
+  ['concrete', ['PRECAST', 'CONCRETE']],
+  ['brick', ['BRICK', 'MASONRY']],
+];
+
+/** The inspector-recorded wall type, which is the only direct evidence of what a façade is made of. */
+export function materialFromWallType(text) {
+  if (!text) return null;
+  const upper = text.toUpperCase();
+  for (const [material, tokens] of WALL_TYPE_MATCHERS) {
+    if (tokens.some((t) => upper.includes(t))) return material;
+  }
+  return null;
+}
+
+/**
+ * Fallback for the ~90% of footprints with no façade filing (only buildings over six storeys file).
+ * These are construction-era conventions for Manhattan, not records, and are flagged as inferred.
+ */
+export function materialFromEra(bldgclass, yearBuilt, floors) {
+  const cls = (bldgclass ?? '').toUpperCase();
+  const year = Number.isFinite(yearBuilt) ? yearBuilt : null;
+  const storeys = Number.isFinite(floors) && floors > 0 ? floors : null;
+  if (cls.startsWith('G') || cls.startsWith('T') || cls.startsWith('U')) return 'concrete'; // garages, transport, utility
+  if (year === null) return 'brick';
+  if (year >= 1995 && (storeys ?? 0) >= 8) return 'curtain';
+  if (year >= 1960 && (storeys ?? 0) >= 20) return 'curtain';
+  if (year >= 1950 && (storeys ?? 0) >= 10) return 'concrete';
+  // Prewar towers are overwhelmingly terra-cotta-clad above a stone base.
+  if (year >= 1900 && year < 1945 && (storeys ?? 0) >= 10) return 'terra_cotta';
+  // Cast iron is specific to the SoHo/Tribeca commercial lofts of the second half of the 1800s,
+  // not to pre-1900 buildings generally, so it needs the loft or store class as well as the era.
+  const loft = cls.startsWith('L') || cls.startsWith('K');
+  if (loft && year >= 1850 && year < 1900 && (storeys ?? 0) >= 4 && (storeys ?? 0) <= 8) return 'cast_iron';
+  return 'brick';
+}
+
+/** Latest recorded exterior wall type per BIN, from DOB NOW façade filings. */
+async function loadWallTypes() {
+  console.log('Downloading recorded exterior wall types (xubg-57si)…');
+  const rows = await fetchAll(
+    FACADE_API,
+    {
+      $select: 'bin,cycle,exterior_wall_type_s_',
+      $where: "exterior_wall_type_s_ IS NOT NULL AND starts_with(bin, '1')",
+      $order: 'bin,cycle',
+    },
+    'facade-wall-types-mn.json',
+  );
+  // Rows are ordered by cycle, so the last write per BIN is the most recent inspection.
+  const map = new Map();
+  for (const r of rows) {
+    const bin = idString(r.bin);
+    const material = materialFromWallType(r.exterior_wall_type_s_);
+    if (bin && material) map.set(bin, material);
+  }
+  return map;
+}
+
 async function main() {
-  const [rows, addresses] = await Promise.all([loadFootprints(), loadAddresses()]);
+  const [rows, lots, wallTypes] = await Promise.all([loadFootprints(), loadLots(), loadWallTypes()]);
   const { north, west, south, east } = DEMO_BBOX;
   const byBin = new Map();
   let dropped = 0;
+  let recorded = 0;
 
   for (const r of rows) {
     const bin = idString(r.bin);
@@ -202,7 +287,13 @@ async function main() {
     const height_m = Number.isFinite(heightFt) && heightFt > 0 ? Math.round(heightFt * FEET_TO_M * 10) / 10 : null;
     const year = Number(r.construction_year);
     const bbl = idString(r.base_bbl);
-    const address = bbl && addresses.has(bbl) ? formatAddress(addresses.get(bbl)) : null;
+    const lot = (bbl && lots.get(bbl)) || null;
+    const address = lot?.address ? formatAddress(lot.address) : null;
+    // The footprint's own construction year is the more specific of the two; PLUTO is per lot.
+    const year_built = Number.isFinite(year) && year > 1700 ? year : lot?.yearbuilt ?? null;
+
+    const fromFiling = wallTypes.get(bin) ?? null;
+    if (fromFiling) recorded++;
 
     const feature = {
       type: 'Feature',
@@ -210,7 +301,10 @@ async function main() {
         bin,
         address,
         height_m,
-        year_built: Number.isFinite(year) && year > 1700 ? year : null,
+        year_built,
+        floors: lot?.floors ?? null,
+        material: fromFiling ?? materialFromEra(lot?.bldgclass, year_built, lot?.floors),
+        material_source: fromFiling ? 'filing' : 'inferred',
       },
       geometry,
     };
@@ -223,10 +317,18 @@ async function main() {
   const fc = {
     type: 'FeatureCollection',
     metadata: {
-      source: 'NYC Open Data — Building Footprints (5zhs-2jue); addresses from MapPLUTO (64uk-42ks)',
+      source:
+        'NYC Open Data — Building Footprints (5zhs-2jue); lot attributes from MapPLUTO (64uk-42ks); ' +
+        'exterior wall types from DOB NOW Façade Compliance Filings (xubg-57si)',
       bbox: [west, south, east, north],
       generated_by: 'frontend/scripts/prepare-buildings.mjs',
       units: { height_m: 'metres (converted from height_roof in feet)' },
+      material: {
+        classes: WALL_TYPE_MATCHERS.map(([id]) => id),
+        recorded: recorded,
+        inferred: features.length - recorded,
+        note: "material_source is 'filing' where an inspector recorded the exterior wall type, otherwise 'inferred' from construction era and building class",
+      },
     },
     features,
   };
@@ -234,6 +336,7 @@ async function main() {
   const json = JSON.stringify(fc);
   await writeFile(OUT, json);
   console.log(`Wrote ${features.length} buildings (${(json.length / 1e6).toFixed(2)} MB), dropped ${dropped} rows → ${OUT}`);
+  console.log(`  façade material: ${recorded} from filings, ${features.length - recorded} inferred`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

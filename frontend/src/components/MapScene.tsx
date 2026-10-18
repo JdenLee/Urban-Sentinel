@@ -8,12 +8,20 @@ import { buildingRiskLayers } from '../layers/buildingRiskLayer';
 import { movementHexagonLayer, movementPoints, type MovementPointDatum } from '../layers/movementHexagonLayer';
 import { PRIORITY_LABEL } from '../data/priority';
 import { INITIAL_VIEW } from '../camera';
+import { sunState } from '../data/sunPosition';
 import { adaptBasemapStyle } from '../data/basemapStyle';
 import { CinematicOverlay } from './CinematicOverlay';
 import { buildingName, landmarkFor } from '../data/landmarks';
 import { pickedBuilding } from '../layers/landmarkLayer';
 
 export const BASEMAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
+
+/**
+ * The map fills the window and the panels float above it. That is what gives the translucent
+ * surfaces something to sample: a panel docked beside the map would have only page behind it.
+ * Camera framing compensates for the overlap through flyTo padding instead (see App.tsx).
+ */
+const VIEWPORT: React.CSSProperties = { position: 'absolute', inset: 0 };
 
 /** Dark background-only style used if the basemap cannot be fetched; the scored overlay still renders. */
 const FALLBACK_STYLE: StyleSpecification = {
@@ -86,11 +94,23 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
     [externalMovement, join, dataMode],
   );
 
-  const effects = useMemo(() => [new LightingEffect({
-    ambient: new AmbientLight({ color: [225, 235, 255], intensity: 1.0 }),
-    key: new DirectionalLight({ color: [255, 245, 230], intensity: 1.0, direction: [-3, -5, -4] }),
-    fill: new DirectionalLight({ color: [165, 200, 255], intensity: 0.35, direction: [3, 1, -2] }),
-  })], []);
+  // One sun for the whole scene: it lights the geometry and also rakes the façade shader, so the
+  // relief in the material falls on the same side as the shading on the massing.
+  const sun = useMemo(() => sunState(new Date(), INITIAL_VIEW.latitude, INITIAL_VIEW.longitude), []);
+
+  const effects = useMemo(
+    () => [
+      new LightingEffect({
+        ambient: new AmbientLight({ color: [225, 235, 255], intensity: sun.ambientIntensity }),
+        // deck.gl's shadow pass stays off: interleaved with MapLibre it shadows the whole scene and
+        // buries the risk colours. The façade shader rakes the same sun vector for relief instead.
+        key: new DirectionalLight({ color: [255, 245, 230], intensity: sun.keyIntensity, direction: sun.direction }),
+        // Bounce off the sky on the shaded side, so north faces are readable rather than black.
+        fill: new DirectionalLight({ color: [165, 200, 255], intensity: 0.35, direction: [sun.toSun[0], sun.toSun[1], -0.4] }),
+      }),
+    ],
+    [sun],
+  );
 
   const layers = useMemo(
     () => [
@@ -103,10 +123,11 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
         visiblePriorities,
         capacityCutoff,
         pulse: 0.4,
+        sun,
         highlight,
       }),
     ],
-    [points, showMovement, hexRadius, context, join.scored, showRisk, selectedBin, visiblePriorities, capacityCutoff, highlight],
+    [points, showMovement, hexRadius, context, join.scored, showRisk, selectedBin, visiblePriorities, capacityCutoff, sun, highlight],
   );
 
   const onClick = useCallback(
@@ -146,7 +167,7 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
       onMouseDown={onUserInteract}
       onTouchStart={onUserInteract}
       onWheel={onUserInteract}
-      style={{ position: 'absolute', inset: 0 }}
+      style={VIEWPORT}
     >
       <NavigationControl position="bottom-right" visualizePitch />
       <CinematicOverlay interleaved layers={layers} effects={effects} onClick={onClick} getTooltip={getTooltip} />

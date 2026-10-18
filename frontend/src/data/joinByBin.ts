@@ -1,3 +1,4 @@
+import { DEFAULT_MATERIAL } from './facadeMaterials';
 import type { BuildingCollection, JoinResult, JoinedFeature, PredictionSet } from '../types/predictions';
 
 /** Used when a footprint has no roof height; roughly a four-storey walk-up. */
@@ -23,6 +24,8 @@ export function joinByBin(buildings: BuildingCollection, predictions: Prediction
         address: prediction?.address ?? f.properties.address ?? null,
         height_m: hasHeight ? h : DEFAULT_HEIGHT_M,
         height_estimated: !hasHeight,
+        material: f.properties.material ?? DEFAULT_MATERIAL,
+        material_source: f.properties.material_source ?? 'inferred',
         prediction,
         recorded: prediction ? null : (predictions.recorded?.get(bin) ?? null),
         unscoredReason: prediction ? null : (predictions.coverage?.reasons.get(bin) ?? null),
