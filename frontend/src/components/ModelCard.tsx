@@ -1,12 +1,9 @@
 import { useEffect, useRef } from 'react';
 import type { PredictionSet } from '../types/predictions';
 import { PRIORITY_RANGE } from '../data/priority';
+import { formatDate } from '../data/formatDate';
 
-const fmtDate = (s: string | null) => {
-  if (!s) return '—';
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? s : d.toISOString().slice(0, 10);
-};
+const fmtDate = formatDate;
 
 /** Model card: what the score means, how it was validated, and its limits. */
 export function ModelCardDialog({ predictions, onClose }: { predictions: PredictionSet; onClose: () => void }) {
