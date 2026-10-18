@@ -17,6 +17,7 @@ import { fetchFootprint, fetchHistory } from './data/loadHistory';
 import { useAssignments } from './data/shortlist';
 import { INITIAL_CAMERA, prefersReducedMotion } from './camera';
 import { API_BASE } from './config';
+import { displayHeight } from './data/landmarks';
 import {
   PRIORITIES,
   type BuildingFeature,
@@ -136,14 +137,14 @@ export default function App() {
 
   const featureByBin = useMemo(() => new Map((join?.features ?? []).map((f) => [f.properties.bin, f])), [join]);
 
-  const flyTo = useCallback((center: [number, number]) => {
+  const flyTo = useCallback((center: [number, number], height = 0) => {
     const map = mapRef.current?.getMap();
     if (!map) return;
     map.flyTo({
       center,
-      zoom: Math.max(map.getZoom(), 16.2),
-      pitch: 60,
-      padding: isNarrow() ? { top: 40, bottom: 40, left: 20, right: 20 } : { top: 40, bottom: 40, left: 340, right: 420 },
+      zoom: height > 300 ? 15.05 : height > 120 ? 15.7 : Math.max(map.getZoom(), 16.2),
+      pitch: height > 300 ? 52 : 60,
+      padding: isNarrow() ? { top: height > 300 ? 140 : 40, bottom: 40, left: 20, right: 20 } : { top: height > 300 ? 200 : 40, bottom: 40, left: 340, right: 420 },
       duration: prefersReducedMotion() ? 0 : 2200,
     });
   }, []);
@@ -159,7 +160,7 @@ export default function App() {
       if (bin && isNarrow()) setSidebarOpen(false);
       if (!bin || !fly) return;
       const f = featureByBin.get(bin);
-      if (f) flyTo(featureCentroid(f));
+      if (f) flyTo(featureCentroid(f), displayHeight(f));
       else if (target?.lonLat) flyTo(target.lonLat);
       else pendingFly.current = true;
     },
@@ -214,7 +215,7 @@ export default function App() {
         setExternal(jf);
         if (pendingFly.current) {
           pendingFly.current = false;
-          flyTo(featureCentroid(jf));
+          flyTo(featureCentroid(jf), displayHeight(jf));
         }
       })
       .catch(() => {
@@ -357,7 +358,7 @@ export default function App() {
       </header>
 
       <aside id="sidebar" className="panel sidebar" aria-label="Map controls" hidden={!sidebarOpen}>
-        <SearchBox scored={join.scored} onSelect={(bin) => select(bin, true)} onLookup={lookup} />
+        <SearchBox scored={join.scored} features={join.features} onSelect={(bin) => select(bin, true)} onLookup={lookup} />
         <LayerControls
           showRisk={showRisk}
           showMovement={movementOn}

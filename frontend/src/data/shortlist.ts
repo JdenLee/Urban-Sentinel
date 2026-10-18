@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { JoinedFeature } from '../types/predictions';
 import { PRIORITY_LABEL } from './priority';
 import type { AddressMatch } from './geosearch';
+import { buildingName } from './landmarks';
 
 export type AssignmentStatus = 'unassigned' | 'assigned' | 'inspected' | 'deferred';
 export const ASSIGNMENT_LABEL: Record<AssignmentStatus, string> = {
@@ -83,6 +84,7 @@ export function downloadText(filename: string, text: string, type = 'text/csv') 
 
 export type SearchItem =
   | { kind: 'scored'; bin: string; label: string; feature: JoinedFeature }
+  | { kind: 'landmark'; bin: string; label: string; feature: JoinedFeature }
   | { kind: 'address'; bin: string; label: string; match: AddressMatch }
   | { kind: 'bin'; bin: string; label: string };
 
@@ -95,13 +97,16 @@ export function combineSearchResults(
   addresses: AddressMatch[],
   query: string,
   limit = 10,
+  landmarks: JoinedFeature[] = [],
 ): SearchItem[] {
-  const items: SearchItem[] = local.map((f) => ({
+  const landmarkBins = new Set(landmarks.map((f) => f.properties.bin));
+  const items: SearchItem[] = landmarks.map((f) => ({ kind: 'landmark', bin: f.properties.bin, label: buildingName(f.properties.bin, f.properties.address), feature: f }));
+  items.push(...local.filter((f) => !landmarkBins.has(f.properties.bin)).map((f) => ({
     kind: 'scored' as const,
     bin: f.properties.bin,
-    label: f.properties.address ?? `BIN ${f.properties.bin}`,
+    label: buildingName(f.properties.bin, f.properties.address),
     feature: f,
-  }));
+  })));
   const seen = new Set(items.map((i) => i.bin));
   for (const m of addresses) {
     if (seen.has(m.bin)) continue;

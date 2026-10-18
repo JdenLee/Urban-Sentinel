@@ -10,6 +10,8 @@ import { PRIORITY_LABEL } from '../data/priority';
 import { INITIAL_VIEW } from '../camera';
 import { adaptBasemapStyle } from '../data/basemapStyle';
 import { CinematicOverlay } from './CinematicOverlay';
+import { buildingName, landmarkFor } from '../data/landmarks';
+import { pickedBuilding } from '../layers/landmarkLayer';
 
 export const BASEMAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
 
@@ -109,21 +111,21 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
 
   const onClick = useCallback(
     (info: PickingInfo) => {
-      const f = info.object as JoinedFeature | undefined;
+      const f = pickedBuilding(info.object);
       onSelect(f ? f.properties.bin : null);
     },
     [onSelect],
   );
 
   const getTooltip = useCallback((info: PickingInfo) => {
-    const f = info.object as JoinedFeature | undefined;
+    const f = pickedBuilding(info.object);
     if (!f) return null;
     const p = f.properties.prediction;
     const head = p ? `#${p.rank} · ${PRIORITY_LABEL[p.priority]}` : 'Not scored · click for history';
     return {
       html: `<div class="tt-rank">${head}</div><div class="tt-addr">${escapeHtml(
-        f.properties.address ?? `BIN ${f.properties.bin}`,
-      )}</div>`,
+        buildingName(f.properties.bin, f.properties.address),
+      )}</div>${landmarkFor(f.properties.bin) ? `<div class="tt-address">${escapeHtml(landmarkFor(f.properties.bin)!.address)}</div>` : ''}`,
       className: 'deck-tooltip',
       style: { background: 'none', padding: '0', color: 'inherit' },
     };

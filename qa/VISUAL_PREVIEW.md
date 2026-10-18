@@ -17,12 +17,22 @@ No team checkout, API implementation, ML pipeline, score contract, or deployment
 | --- | --- |
 | `frontend/src/components/CinematicOverlay.tsx` | Animate only the selected beacon; pause it when hidden or reduced motion is requested. |
 | `frontend/src/components/MapScene.tsx` | Stable city layers and directional lighting. |
+| `frontend/src/App.tsx` | Search all loaded landmark footprints and frame tall buildings with room for their spires. |
+| `frontend/src/components/BuildingPanel.tsx` | Landmark titles, addresses, sources, and clear unscored/history-unavailable states. |
+| `frontend/src/components/Shortlist.tsx` | Named landmark search and shortlist display. |
+| `frontend/src/data/shortlist.ts` | Merge landmark results without duplicate BINs. |
+| `frontend/src/data/landmarks.ts` | Seven verified landmark identities; presentation metadata only. |
+| `frontend/src/data/landmarkGeometry.ts` | Lightweight illustrative One WTC shape, façade bands, and spire. |
+| `frontend/src/data/landmarks.test.ts` | Identity, missing-score, search, geometry, and selection regression checks. |
+| `frontend/src/layers/BuildingFacadeExtension.ts` | GPU window-bay pattern that fades in at close zoom. |
+| `frontend/src/layers/landmarkLayer.ts` | Landmark geometry and labels with collision handling. |
 | `frontend/src/data/basemapStyle.ts` | Suppress duplicate basemap buildings so scored roofs and walls remain visible. |
 | `frontend/src/data/basemapStyle.test.ts` | Regression checks for building occlusion and preserving other map layers. |
 | `frontend/src/components/DemoController.tsx` | Gentler 30-second camera sequence, responsive framing, CSS progress animation, and one-second React clock updates. |
 | `frontend/src/layers/buildingRiskLayer.ts` | Smaller, softer selection beacon. |
 | `frontend/src/visual-polish.css` | Panel contrast, typography, restrained glow, transitions, and control placement. |
 | `frontend/src/main.tsx` | Load the isolated visual stylesheet after existing styles. |
+| `frontend/package.json`, `frontend/package-lock.json` | Add `@deck.gl/extensions` 9.4.0 (matching the installed deck.gl version) for label collision handling. |
 | `qa/VISUAL_PREVIEW.md` | Scope and validation notes. |
 
 The automatic finale returns to the priority overview. Satellite movement remains manually available; it is not forced on by the camera script. The risk palette and numeric scores are unchanged.
@@ -38,7 +48,7 @@ VITE_API_URL=/qa-offline VITE_PREDICTIONS_URL=/data/qa-preview.json npm run dev 
 
 ## Validation
 
-- Frontend suite: 41 tests passed, including two basemap regression checks.
+- Frontend suite: 46 tests passed, including basemap and landmark regression checks.
 - TypeScript and Vite production build passed.
 - Browser preview at 1280 × 720: completed the 30-second sequence, reopened the selected building, restarted the demo, stopped with Escape, and used Reset View.
 - No browser error/warning logs observed during these checks.
@@ -54,3 +64,19 @@ This proposal overlaps frontend presentation files in PR #6, so integrate it onl
 Release QA findings remain separate: priority thresholds versus percentile categories, shortlist/map capacity alignment, the invalid trained-through date, request timeouts, and verification against the final LinuxONE export. A visual preview is not evidence those release gates have passed.
 
 Coverage remains the existing Lower Manhattan demo bounding box. Broader map coverage requires more prepared footprints and matching prediction exports; no geographic expansion is included. Removing duplicate basemap extrusions also leaves areas outside the prepared scene as a flat basemap unless an individual searched footprint is loaded.
+
+## Landmark and close-up detail follow-up
+
+Names are keyed to footprint BINs for One World Trade Center, 7 World Trade Center, Woolworth Building, New York City Hall, The Trump Building (40 Wall Street), 70 Pine Street, and 8 Spruce / New York by Gehry. Names and aliases work in search; tooltip, panel, and shortlist titles use the same lookup. Original addresses, predictions, ranks, and ML inputs remain unchanged. Sources for each display identity are linked in `landmarks.ts` and the building panel.
+
+The initial map extruded one simplified footprint to a single roof height. It contained no actual façade, roof equipment, taper, crown, or spire model. Close-up window bays are now drawn on the GPU and fade in with zoom; they are illustrative rather than measured windows. One WTC has a separate approximate model with a cubic base, eight triangular faces, a rotated roof, and spire. Its form follows [SOM's project description](https://www.som.com/projects/one-world-trade-center/); roof/spire heights are approximately 417.1 / 541.3 metres. This is not a photogrammetric, engineering, or as-built model. Other landmarks retain their original extruded geometry.
+
+### Why One WTC is unscored in this preview
+
+- Prepared footprint: BIN `1088469`, parcel-derived address `185 Greenwich Street`, source roof height 429.3 m.
+- The local `data/outputs/buildings_scores.json` (model `7466a264b5ba6762`, generated 2026-10-17 22:30 UTC) has zero records for that BIN, across 16,512 building records.
+- The cached `data/raw/facades.csv.gz` also has zero filings for that BIN. This is a data-coverage finding, not a finding about inspection obligations, building safety, or why records are absent upstream.
+- The current ML code builds its universe from FISP records and predicts pending buildings. No prediction was invented to color a famous building.
+- The panel now explicitly explains an absent score and distinguishes it from low risk. Unscored One WTC stays neutral silver-gray; selection outlines it in cyan.
+
+Browser checks include finding One WTC with the `Freedom Tower` and `One WTC` aliases, displaying the unscored notice, finding Woolworth by name with its existing 0.3706 probability, and observing window bays on scored buildings at close zoom. Clicking the custom One WTC model opens BIN `1088469`, confirming that its faces resolve to the original building record. The final 30-second demo completed with the new layers, returned to the inspection overview, and produced no browser warnings or errors. Shader updates required a fresh page load during development; these final checks used a clean reload. This is still a local preview, not live LinuxONE/history validation or an FPS benchmark.

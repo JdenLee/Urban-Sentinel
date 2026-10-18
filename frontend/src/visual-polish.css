@@ -30,6 +30,13 @@
   animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
 }
 .building-panel__title { font-size: 22px; letter-spacing: -0.025em; line-height: 1.2; }
+.building-panel__address { margin: 5px 0 7px; font-size: 13px; color: var(--muted); }
+.coverage-notice { padding: 14px; background: rgba(133, 157, 181, 0.08); border: 1px solid var(--border); border-radius: 8px; }
+.coverage-notice p { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.geometry-note { margin: 8px 0 0; font-size: 11px; line-height: 1.5; color: var(--faint); }
+.landmark-source a { color: #a8e8f4; font-size: 12px; text-decoration: none; }
+.landmark-source a:hover { text-decoration: underline; }
+.tt-address { margin-top: 4px; color: var(--muted); font-size: 11px; }
 .within-cap { display: inline-block; white-space: nowrap; }
 .score__value { font-size: 44px; text-shadow: none; letter-spacing: -0.06em; }
 .score__label { letter-spacing: 0.04em; }
