@@ -19,12 +19,14 @@ import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import geopandas as gpd
 import numpy as np
 import pandas as pd
 import requests
-from shapely.geometry import shape
+
+if TYPE_CHECKING:
+    import geopandas as gpd
 
 SOCRATA = "https://data.cityofnewyork.us/resource"
 FISP_ID = "xubg-57si"
@@ -54,9 +56,9 @@ def _get(dataset: str, params: dict, retries: int = 5) -> list[dict]:
     raise RuntimeError(f"Socrata query to {dataset} failed after {retries} tries")
 
 
-def fetch_fisp_bins() -> pd.DataFrame:
+def fetch_fisp_bins(cache: Path | None = None) -> pd.DataFrame:
     rows, offset = [], 0
-    while True:
+    while cache is None:
         page = _get(
             FISP_ID,
             {
@@ -71,7 +73,9 @@ def fetch_fisp_bins() -> pd.DataFrame:
         if len(page) < 50000:
             break
         offset += 50000
-    df = pd.DataFrame(rows)
+    # Match the original grouped query using the presentation's frozen source snapshot.
+    df = (pd.read_csv(cache, dtype=str)[["bin", "borough", "block", "lot"]].drop_duplicates()
+          if cache is not None else pd.DataFrame(rows))
     df["bin"] = pd.to_numeric(df["bin"], errors="coerce")
     df = df.dropna(subset=["bin"])
     df["bin"] = df["bin"].astype(np.int64)
@@ -103,6 +107,8 @@ def _footprint_batch(bins: list[int]) -> list[dict]:
 
 
 def fetch_footprints(bins: list[int]) -> gpd.GeoDataFrame:
+    import geopandas as gpd
+    from shapely.geometry import shape
     batches = [bins[i : i + BATCH] for i in range(0, len(bins), BATCH)]
     with ThreadPoolExecutor(max_workers=4) as ex:
         results = list(ex.map(_footprint_batch, batches))
@@ -121,7 +127,7 @@ def fetch_footprints(bins: list[int]) -> gpd.GeoDataFrame:
     return gdf
 
 
-def fetch_pluto(bbls: list[int]) -> pd.DataFrame:
+def fetch_pluto(bbls: list[int], cache: Path | None = None) -> pd.DataFrame:
     def batch(chunk: list[int]) -> list[dict]:
         where = "bbl in (" + ",".join(f"'{b}'" for b in chunk) + ")"
         return _get(
@@ -130,9 +136,12 @@ def fetch_pluto(bbls: list[int]) -> pd.DataFrame:
         )
 
     chunks = [bbls[i : i + BATCH] for i in range(0, len(bbls), BATCH)]
-    with ThreadPoolExecutor(max_workers=4) as ex:
-        rows = [r for res in ex.map(batch, chunks) for r in res]
-    df = pd.DataFrame(rows, columns=["bbl", "latitude", "longitude"])
+    if cache is not None:
+        df = pd.read_csv(cache, dtype=str)[["bbl", "latitude", "longitude"]]
+    else:
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            rows = [r for res in ex.map(batch, chunks) for r in res]
+        df = pd.DataFrame(rows, columns=["bbl", "latitude", "longitude"])
     df["bbl"] = pd.to_numeric(df["bbl"], errors="coerce").round().astype("Int64")
     df["lat"] = pd.to_numeric(df["latitude"], errors="coerce")
     df["lon"] = pd.to_numeric(df["longitude"], errors="coerce")
@@ -142,12 +151,22 @@ def fetch_pluto(bbls: list[int]) -> pd.DataFrame:
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--out", type=Path, default=REPO / "data/insar/ref/fisp_buildings.csv.gz")
+    p.add_argument("--facades-cache", type=Path, help="Reuse a municipal façade snapshot instead of refreshing")
+    p.add_argument("--pluto-cache", type=Path, help="Reuse the same municipal PLUTO snapshot")
+    p.add_argument("--footprints-cache", type=Path, help="Persist/reuse projected footprint geometries for this run")
     args = p.parse_args()
+    import geopandas as gpd
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    fisp = fetch_fisp_bins()
+    fisp = fetch_fisp_bins(args.facades_cache)
     real = sorted(set(fisp["bin"]) - PLACEHOLDER_BINS)
-    fp = fetch_footprints(real)
+    if args.footprints_cache and args.footprints_cache.exists():
+        fp = gpd.read_file(args.footprints_cache).to_crs("EPSG:32618")
+    else:
+        fp = fetch_footprints(real)
+        if args.footprints_cache:
+            args.footprints_cache.parent.mkdir(parents=True, exist_ok=True)
+            fp.to_file(args.footprints_cache, driver="GeoJSON")
     cent = fp.geometry.centroid
     fp_df = pd.DataFrame(
         {
@@ -163,7 +182,7 @@ def main() -> None:
 
     missing = out["x_utm18n"].isna() & out["bbl"].notna() & ~out["bin"].isin(PLACEHOLDER_BINS)
     if missing.any():
-        pl = fetch_pluto(sorted(out.loc[missing, "bbl"].astype(int).unique()))
+        pl = fetch_pluto(sorted(out.loc[missing, "bbl"].astype(int).unique()), args.pluto_cache)
         pl_xy = gpd.GeoSeries(gpd.points_from_xy(pl["lon"], pl["lat"]), crs="EPSG:4326").to_crs(
             "EPSG:32618"
         )

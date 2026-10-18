@@ -13,7 +13,7 @@ DATA_DIR = Path(os.environ.get("URBAN_SENTINEL_DATA_DIR", REPO_ROOT / "data"))
 RAW_DIR = DATA_DIR / "raw"
 MODEL_DIR = DATA_DIR / "models"
 OUTPUT_DIR = DATA_DIR / "outputs"
-REPORTS_DIR = ML_DIR / "reports"  # small, committed evaluation summaries
+REPORTS_DIR = Path(os.environ.get("URBAN_SENTINEL_REPORTS_DIR", ML_DIR / "reports"))
 
 SOCRATA_DOMAIN = "data.cityofnewyork.us"
 DATASETS = {
