@@ -641,22 +641,43 @@ body { background: #000; font: var(--t-body) var(--font); color: var(--label); }
   fill: color-mix(in srgb, var(--accent) 14%, transparent); stroke: var(--accent); stroke-width: 3;
   stroke-linejoin: round; vector-effect: non-scaling-stroke; filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.7));
 }
-/* Landmark photos are of towers: a taller frame, biased up so the crown stays in it. */
-.profile__frame--photo { aspect-ratio: 4 / 3; }
+/* Landmark photos are of towers: bias the crop up so the crown stays in frame. */
 .profile__frame--photo img { object-position: 50% 22%; }
 .profile__frame--loading { background: linear-gradient(100deg, var(--fill-4) 30%, var(--fill-3) 50%, var(--fill-4) 70%) 0 0 / 300% 100%; animation: profile-shimmer 1.4s linear infinite; }
 .profile__frame--loading img { opacity: 0; }
 .profile__frame--empty { display: grid; place-items: center; font: var(--t-callout) var(--font); color: var(--label-3); }
 @keyframes profile-shimmer { to { background-position: -150% 0; } }
-.profile__switch {
-  position: absolute; top: var(--sp-2); left: var(--sp-2); display: flex; padding: 2px; gap: 2px;
-  border-radius: var(--r-small); background: var(--mat-thick); -webkit-backdrop-filter: var(--blur-thin); backdrop-filter: var(--blur-thin);
+/* Carousel: a scroll-snap strip, so swipe and trackpad scrolling work natively. */
+.carousel { position: relative; border-radius: var(--r-control); outline: none; }
+.carousel:focus-visible { box-shadow: 0 0 0 2px var(--tint); }
+.carousel__strip {
+  display: flex; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory;
+  border-radius: var(--r-control); scrollbar-width: none;
 }
-.profile__switch button {
-  padding: 3px var(--sp-2); border: 0; border-radius: 5px; background: none; cursor: pointer;
-  font: var(--t-subhead) var(--font); color: var(--label-2);
+.carousel__strip::-webkit-scrollbar { display: none; }
+.carousel__slide { flex: 0 0 100%; scroll-snap-align: start; scroll-snap-stop: always; }
+.carousel__tag, .carousel__nav, .carousel__dots {
+  position: absolute; background: var(--mat-thick); -webkit-backdrop-filter: var(--blur-thin); backdrop-filter: var(--blur-thin);
 }
-.profile__switch button.is-on { background: var(--fill-1); color: var(--label); }
+.carousel__tag {
+  top: var(--sp-2); left: var(--sp-2); padding: 3px var(--sp-2); border-radius: var(--r-small);
+  font: var(--t-subhead) var(--font); color: var(--label); pointer-events: none;
+}
+.carousel__nav {
+  top: 50%; width: 28px; height: 28px; margin-top: -14px; display: grid; place-items: center; padding: 0 0 2px;
+  border: 1px solid var(--separator); border-radius: var(--r-small); cursor: pointer;
+  font: 400 20px/1 var(--font); color: var(--label); opacity: 0; transition: opacity var(--dur-press) var(--ease-press);
+}
+.carousel__nav--prev { left: var(--sp-2); }
+.carousel__nav--next { right: var(--sp-2); }
+.carousel:hover .carousel__nav:not(:disabled), .carousel:focus-within .carousel__nav:not(:disabled) { opacity: 1; }
+.carousel__nav:disabled { cursor: default; }
+@media (hover: none) { .carousel__nav { display: none; } }
+.carousel__dots {
+  bottom: var(--sp-2); left: 50%; transform: translateX(-50%); display: flex; gap: 6px; padding: 5px 7px; border-radius: var(--r-pill);
+}
+.carousel__dots button { width: 6px; height: 6px; padding: 0; border: 0; border-radius: 50%; background: var(--label-3); cursor: pointer; }
+.carousel__dots button.is-on { width: 16px; border-radius: 3px; background: var(--label); }
 .profile__credit {
   display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-2);
   font: var(--t-footnote) var(--font); color: var(--label-3);

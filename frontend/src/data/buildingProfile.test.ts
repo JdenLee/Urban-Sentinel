@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Polygon, MultiPolygon } from 'geojson';
 import { bblFromFootprint, buildingClassLabel, normalizeBbl, parsePluto } from './buildingFacts';
-import { AERIAL_SIZE, aerialView, geometryCenter, parseCommonsPhoto, plain, streetViewUrl } from './buildingImagery';
+import { AERIAL_SIZE, aerialView, geometryCenter, parseCommonsPhoto, plain, streetViewImageUrl, streetViewUrl } from './buildingImagery';
 
 // 10 Avenue D: an NYCHA lot with 18 buildings, as MapPLUTO returns it.
 const PLUTO_ROW = {
@@ -157,5 +157,29 @@ describe('Commons photo', () => {
     expect(plain('<span>Jean&#39;s &lt;photo&gt;&#x21;</span>')).toBe("Jean's <photo>!");
     expect(plain('')).toBeNull();
     expect(plain(42)).toBeNull();
+  });
+});
+
+describe('Street View image', () => {
+  it('needs a key and a valid location', () => {
+    expect(streetViewImageUrl(-73.9776, 40.7174, 30, undefined)).toBeNull();
+    expect(streetViewImageUrl(-73.9776, 40.7174, 30, '')).toBeNull();
+    expect(streetViewImageUrl(999, 40.7, 30, 'k')).toBeNull();
+  });
+
+  it('asks for the nearest outdoor panorama facing the building, and a 404 when there is none', () => {
+    const p = new URL(streetViewImageUrl(-73.9776, 40.7174, 30, 'test-key')!).searchParams;
+    expect(p.get('location')).toBe('40.717400,-73.977600');
+    expect(p.get('heading')).toBeNull(); // Google then aims from the panorama at the location
+    expect(p.get('source')).toBe('outdoor');
+    expect(p.get('return_error_code')).toBe('true');
+    expect(p.get('key')).toBe('test-key');
+  });
+
+  it('tilts up for taller buildings, within limits', () => {
+    const pitch = (h: number) => Number(new URL(streetViewImageUrl(-73.97, 40.71, h, 'k')!).searchParams.get('pitch'));
+    expect(pitch(10)).toBeLessThan(pitch(120));
+    expect(pitch(500)).toBe(28);
+    expect(pitch(-5)).toBe(6);
   });
 });

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Geometry } from 'geojson';
 import { fetchBuildingFacts, type BuildingFacts } from '../data/buildingFacts';
-import { aerialView, fetchCommonsPhoto, geometryCenter, streetViewUrl, type CommonsPhoto } from '../data/buildingImagery';
+import { aerialView, fetchCommonsPhoto, geometryCenter, streetViewImageUrl, streetViewUrl, type CommonsPhoto } from '../data/buildingImagery';
+import { GOOGLE_MAPS_KEY } from '../config';
 import type { Landmark } from '../data/landmarks';
 
 const PLUTO_PAGE = 'https://data.cityofnewyork.us/City-Government/Primary-Land-Use-Tax-Lot-Output-PLUTO-/64uk-42ks';
@@ -70,72 +71,174 @@ export function BuildingProfile({ bin, geometry, heightM, landmark, knownFloors 
   const aerial = useMemo(() => aerialView(geometry, heightM), [geometry, heightM]);
   const center = useMemo(() => geometryCenter(geometry), [geometry]);
   const street = center ? streetViewUrl(center[0], center[1]) : null;
-  const hasPhoto = photo.status === 'ready';
-  const [view, setView] = useState<'photo' | 'aerial'>('photo');
-  const showing = hasPhoto && (view === 'photo' || !aerial) ? 'photo' : aerial ? 'aerial' : null;
+  const streetImage = center ? streetViewImageUrl(center[0], center[1], heightM, GOOGLE_MAPS_KEY) : null;
+  const [failed, setFailed] = useState<ReadonlySet<SlideId>>(new Set());
+  const fail = useCallback((id: SlideId) => setFailed((prev) => new Set(prev).add(id)), []);
+
+  // Fixed order: aerial (always available, exact footprint), then Street View, then a landmark's photo.
+  const slides: Slide[] = [];
+  if (aerial) {
+    slides.push({
+      id: 'aerial',
+      label: 'Aerial',
+      body: <AerialSlide view={aerial} onFail={() => fail('aerial')} />,
+      credit: (
+        <span title="New York State statewide orthoimagery, 2022–2025. The outline is the building's footprint at ground level; tall buildings lean in aerial photos.">
+          Aerial 2022–25 · NYS ITS Geospatial Services
+        </span>
+      ),
+    });
+  }
+  if (streetImage) {
+    slides.push({
+      id: 'street',
+      label: 'Street View',
+      body: <PhotoSlide src={streetImage} alt="Street View of the building" street onFail={() => fail('street')} />,
+      credit: <span title="Google Street View, nearest panorama, facing the building">Street View · © Google</span>,
+    });
+  }
+  if (photo.status === 'ready') {
+    const p = photo.photo;
+    slides.push({
+      id: 'photo',
+      label: 'Photo',
+      body: <PhotoSlide src={p.src} alt={`${landmark?.name ?? 'Building'} photo`} onFail={() => fail('photo')} />,
+      credit: (
+        <a href={p.page} target="_blank" rel="noopener noreferrer" title="Photo, author and licence on Wikimedia Commons">
+          Photo: {p.artist ?? 'Wikimedia Commons'}
+          {p.license ? ` · ${p.license}` : ''} ↗
+        </a>
+      ),
+    });
+  }
+  const visible = slides.filter((sl) => !failed.has(sl.id));
 
   return (
     <section className="profile" aria-label="About this building">
-      {(showing || photo.status === 'loading') && (
-        <figure className="profile__media">
-          {showing === 'photo' && hasPhoto && <LandmarkPhoto photo={photo.photo} alt={`${landmark?.name ?? 'Building'} photo`} />}
-          {showing === 'aerial' && aerial && <AerialPhoto key={aerial.url} view={aerial} />}
-          {!showing && <div className="profile__frame profile__frame--loading" aria-hidden />}
-          {hasPhoto && aerial && (
-            <div className="profile__switch" role="group" aria-label="Image">
-              {(['photo', 'aerial'] as const).map((v) => (
-                <button key={v} type="button" aria-pressed={showing === v} className={showing === v ? 'is-on' : ''} onClick={() => setView(v)}>
-                  {v === 'photo' ? 'Photo' : 'Aerial'}
-                </button>
-              ))}
-            </div>
-          )}
-          <figcaption className="profile__credit">
-            {showing === 'photo' && hasPhoto ? (
-              <a href={photo.photo.page} target="_blank" rel="noopener noreferrer" title="Photo, author and licence on Wikimedia Commons">
-                Photo: {photo.photo.artist ?? 'Wikimedia Commons'}
-                {photo.photo.license ? ` · ${photo.photo.license}` : ''} ↗
-              </a>
-            ) : (
-              <span title="New York State statewide orthoimagery, 2022–2025. The outline is the building's footprint at ground level; tall buildings lean in aerial photos.">
-                Aerial 2022–25 · NYS ITS Geospatial Services
-              </span>
-            )}
-            {street && (
-              <a className="profile__street" href={street} target="_blank" rel="noopener noreferrer">
-                Street View ↗
-              </a>
-            )}
-          </figcaption>
-        </figure>
+      {visible.length > 0 ? (
+        <Carousel slides={visible} street={street} />
+      ) : (
+        photo.status === 'loading' && <div className="profile__frame profile__frame--loading" aria-hidden />
       )}
       <Facts state={facts} knownFloors={knownFloors ?? null} />
     </section>
   );
 }
 
-function LandmarkPhoto({ photo, alt }: { photo: CommonsPhoto; alt: string }) {
+type SlideId = 'photo' | 'street' | 'aerial';
+interface Slide {
+  id: SlideId;
+  label: string;
+  body: ReactNode;
+  credit: ReactNode;
+}
+
+/**
+ * Horizontal scroll-snap strip: swipe, trackpad, arrow keys, the chevrons or the dots all move it,
+ * and the index is read back from the scroll position so every input agrees.
+ */
+function Carousel({ slides, street }: { slides: Slide[]; street: string | null }) {
+  const strip = useRef<HTMLDivElement>(null);
+  const [index, setIndex] = useState(0);
+  const current = Math.min(index, slides.length - 1);
+  const many = slides.length > 1;
+
+  const go = useCallback(
+    (i: number) => {
+      const el = strip.current;
+      if (!el) return;
+      const target = Math.max(0, Math.min(slides.length - 1, i));
+      const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      el.scrollTo({ left: target * el.clientWidth, behavior: smooth ? 'smooth' : 'auto' });
+    },
+    [slides.length],
+  );
+
+  // A slide that fails to load is removed; keep the strip aligned to the slide still being shown.
+  useEffect(() => {
+    if (index > slides.length - 1) go(slides.length - 1);
+  }, [index, slides.length, go]);
+
+  return (
+    <figure className="profile__media">
+      <div
+        className="carousel"
+        role="region"
+        aria-roledescription="carousel"
+        aria-label="Building images"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowRight') go(current + 1);
+          else if (e.key === 'ArrowLeft') go(current - 1);
+          else return;
+          e.preventDefault();
+        }}
+      >
+        <div
+          ref={strip}
+          className="carousel__strip"
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            setIndex(Math.round(el.scrollLeft / Math.max(1, el.clientWidth)));
+          }}
+        >
+          {slides.map((sl, i) => (
+            <div key={sl.id} className="carousel__slide" role="group" aria-roledescription="slide" aria-label={`${i + 1} of ${slides.length}: ${sl.label}`}>
+              {sl.body}
+            </div>
+          ))}
+        </div>
+        <span className="carousel__tag">{slides[current]?.label}</span>
+        {many && (
+          <>
+            <button type="button" className="carousel__nav carousel__nav--prev" aria-label="Previous image" disabled={current === 0} onClick={() => go(current - 1)}>
+              ‹
+            </button>
+            <button type="button" className="carousel__nav carousel__nav--next" aria-label="Next image" disabled={current === slides.length - 1} onClick={() => go(current + 1)}>
+              ›
+            </button>
+            <div className="carousel__dots">
+              {slides.map((sl, i) => (
+                <button key={sl.id} type="button" aria-label={`Show ${sl.label}`} aria-current={i === current} className={i === current ? 'is-on' : ''} onClick={() => go(i)} />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+      <figcaption className="profile__credit">
+        {slides[current]?.credit}
+        {street && (
+          <a className="profile__street" href={street} target="_blank" rel="noopener noreferrer">
+            Open Street View ↗
+          </a>
+        )}
+      </figcaption>
+    </figure>
+  );
+}
+
+function PhotoSlide({ src, alt, street, onFail }: { src: string; alt: string; street?: boolean; onFail: () => void }) {
   const [loaded, setLoaded] = useState(false);
   return (
-    <div className={`profile__frame profile__frame--photo${loaded ? '' : ' profile__frame--loading'}`}>
-      <img src={photo.src} alt={alt} decoding="async" onLoad={() => setLoaded(true)} />
+    <div className={`profile__frame${street ? '' : ' profile__frame--photo'}${loaded ? '' : ' profile__frame--loading'}`}>
+      <img src={src} alt={alt} decoding="async" draggable={false} onLoad={() => setLoaded(true)} onError={onFail} />
     </div>
   );
 }
 
-function AerialPhoto({ view }: { view: NonNullable<ReturnType<typeof aerialView>> }) {
-  const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading');
-  if (state === 'failed') return <div className="profile__frame profile__frame--empty">Aerial photo unavailable right now</div>;
+function AerialSlide({ view, onFail }: { view: NonNullable<ReturnType<typeof aerialView>>; onFail: () => void }) {
+  const [loaded, setLoaded] = useState(false);
   return (
-    <div className={`profile__frame${state === 'loading' ? ' profile__frame--loading' : ''}`}>
+    <div className={`profile__frame${loaded ? '' : ' profile__frame--loading'}`}>
       <img
         src={view.url}
         alt="Aerial photo of the building with its footprint outlined"
         decoding="async"
-        onLoad={() => setState('ready')}
-        onError={() => setState('failed')}
+        draggable={false}
+        onLoad={() => setLoaded(true)}
+        onError={onFail}
       />
-      {state === 'ready' && (
+      {loaded && (
         <svg viewBox={`0 0 ${view.width} ${view.height}`} preserveAspectRatio="xMidYMid slice" aria-hidden>
           <path d={view.outline} fillRule="evenodd" />
         </svg>
