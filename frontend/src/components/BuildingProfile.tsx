@@ -75,19 +75,17 @@ export function BuildingProfile({ bin, geometry, heightM, landmark, knownFloors 
   const [failed, setFailed] = useState<ReadonlySet<SlideId>>(new Set());
   const fail = useCallback((id: SlideId) => setFailed((prev) => new Set(prev).add(id)), []);
 
-  // Street level first: it is how a building is recognised. Landmarks lead with their curated photo.
+  // Fixed order: aerial (always available, exact footprint), then Street View, then a landmark's photo.
   const slides: Slide[] = [];
-  if (photo.status === 'ready') {
-    const p = photo.photo;
+  if (aerial) {
     slides.push({
-      id: 'photo',
-      label: 'Photo',
-      body: <PhotoSlide src={p.src} alt={`${landmark?.name ?? 'Building'} photo`} onFail={() => fail('photo')} />,
+      id: 'aerial',
+      label: 'Aerial',
+      body: <AerialSlide view={aerial} onFail={() => fail('aerial')} />,
       credit: (
-        <a href={p.page} target="_blank" rel="noopener noreferrer" title="Photo, author and licence on Wikimedia Commons">
-          Photo: {p.artist ?? 'Wikimedia Commons'}
-          {p.license ? ` · ${p.license}` : ''} ↗
-        </a>
+        <span title="New York State statewide orthoimagery, 2022–2025. The outline is the building's footprint at ground level; tall buildings lean in aerial photos.">
+          Aerial 2022–25 · NYS ITS Geospatial Services
+        </span>
       ),
     });
   }
@@ -99,15 +97,17 @@ export function BuildingProfile({ bin, geometry, heightM, landmark, knownFloors 
       credit: <span title="Google Street View, nearest panorama, facing the building">Street View · © Google</span>,
     });
   }
-  if (aerial) {
+  if (photo.status === 'ready') {
+    const p = photo.photo;
     slides.push({
-      id: 'aerial',
-      label: 'Aerial',
-      body: <AerialSlide view={aerial} onFail={() => fail('aerial')} />,
+      id: 'photo',
+      label: 'Photo',
+      body: <PhotoSlide src={p.src} alt={`${landmark?.name ?? 'Building'} photo`} onFail={() => fail('photo')} />,
       credit: (
-        <span title="New York State statewide orthoimagery, 2022–2025. The outline is the building's footprint at ground level; tall buildings lean in aerial photos.">
-          Aerial 2022–25 · NYS ITS Geospatial Services
-        </span>
+        <a href={p.page} target="_blank" rel="noopener noreferrer" title="Photo, author and licence on Wikimedia Commons">
+          Photo: {p.artist ?? 'Wikimedia Commons'}
+          {p.license ? ` · ${p.license}` : ''} ↗
+        </a>
       ),
     });
   }
