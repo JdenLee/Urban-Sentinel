@@ -13,6 +13,7 @@ import type {
 import { PRIORITY_COLOR, PRIORITY_LABEL, SELECTED_COLOR, rgbCss } from '../data/priority';
 import { ASSIGNMENT_LABEL, ASSIGNMENT_STATUSES, type AssignmentStatus } from '../data/shortlist';
 import { RECORD_TYPES } from '../data/loadHistory';
+import { DOB_NOW_PORTAL_URL, cycleFromDescription, dobBisFacadesUrl, dobBisProfileUrl, openDataFilingUrl } from '../data/recordLinks';
 import { LiveRescore } from './LiveRescore';
 import { buildingName, landmarkFor } from '../data/landmarks';
 
@@ -144,7 +145,7 @@ export function BuildingPanel(props: BuildingPanelProps) {
         )}
         {active === 'overview' && p && <OverviewTab {...props} p={p} color={color} />}
         {active === 'evidence' && p && <EvidenceTab p={p} />}
-        {active === 'history' && <HistoryTab p={p} history={history} color={color} />}
+        {active === 'history' && <HistoryTab p={p} history={history} color={color} bin={bin} />}
         {landmark && <p className="landmark-source"><a href={landmark.source} target="_blank" rel="noreferrer">About this landmark ↗</a></p>}
       </div>
 
@@ -368,7 +369,7 @@ function MovementSection({ data, p, color }: { data: BuildingHistory | null; p: 
   );
 }
 
-function Timeline({ records }: { records: RecordEvent[] }) {
+function Timeline({ records, bin }: { records: RecordEvent[]; bin: string }) {
   const [filter, setFilter] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const counts = useMemo(() => {
@@ -404,7 +405,10 @@ function Timeline({ records }: { records: RecordEvent[] }) {
           <li key={i} className="timeline__item">
             <span className="timeline__date mono">{r.date ?? '—'}</span>
             <span className="timeline__type">{r.type}</span>
-            <span className="timeline__desc">{r.description}</span>
+            <span className="timeline__desc">
+              {r.description}
+              <FilingLink record={r} bin={bin} />
+            </span>
           </li>
         ))}
       </ol>
@@ -431,7 +435,56 @@ function SourcesList({ sources }: { sources: SourceRef[] }) {
   );
 }
 
-function HistoryTab({ p, history, color }: { p: BuildingPrediction | null; history: HistoryState; color: string }) {
+/** "View filing" for FISP records: the exact row on NYC Open Data (by TR6 number, else BIN + cycle). */
+function FilingLink({ record, bin }: { record: RecordEvent; bin: string }) {
+  if (record.type !== 'FISP filing') return null;
+  const url = openDataFilingUrl({ bin, cycle: record.cycle ?? cycleFromDescription(record.description), reference: record.reference });
+  if (!url) return null;
+  return (
+    <a className="record-link" href={url} target="_blank" rel="noopener noreferrer" title="Open this filing in NYC Open Data (official DOB data)">
+      View filing ↗
+    </a>
+  );
+}
+
+/** Building-level links to the official DOB systems the records come from. */
+function OfficialRecords({ bin }: { bin: string }) {
+  const facades = dobBisFacadesUrl(bin);
+  const profile = dobBisProfileUrl(bin);
+  const allFilings = openDataFilingUrl({ bin });
+  if (!facades && !profile) return null;
+  return (
+    <section>
+      <h3 className="section-title">Official records</h3>
+      <ul className="record-links">
+        {facades && (
+          <li>
+            <a href={facades} target="_blank" rel="noopener noreferrer">DOB façade filings (BIS) ↗</a>
+            <span className="muted small"> every FISP cycle for this BIN; reports before 2016 in full</span>
+          </li>
+        )}
+        {allFilings && (
+          <li>
+            <a href={allFilings} target="_blank" rel="noopener noreferrer">All façade filings on NYC Open Data ↗</a>
+            <span className="muted small"> TR6 reports, statuses and inspection dates</span>
+          </li>
+        )}
+        {profile && (
+          <li>
+            <a href={profile} target="_blank" rel="noopener noreferrer">DOB property profile (BIS) ↗</a>
+            <span className="muted small"> complaints, violations and permits</span>
+          </li>
+        )}
+        <li>
+          <a href={DOB_NOW_PORTAL_URL} target="_blank" rel="noopener noreferrer">DOB NOW Public Portal ↗</a>
+          <span className="muted small"> newer façade reports (search by BIN {bin})</span>
+        </li>
+      </ul>
+    </section>
+  );
+}
+
+function HistoryTab({ p, history, color, bin }: { p: BuildingPrediction | null; history: HistoryState; color: string; bin: string }) {
   const data = history.status === 'ready' ? history.data : null;
   // Without the API, fall back to whatever the prediction file carries (the mock data has records and movement).
   const records = data ? data.records : (p?.record_history ?? []);
@@ -444,9 +497,10 @@ function HistoryTab({ p, history, color }: { p: BuildingPrediction | null; histo
       {(data || records.length > 0) && (
         <section>
           <h3 className="section-title">Record history</h3>
-          <Timeline records={records} />
+          <Timeline records={records} bin={bin} />
         </section>
       )}
+      <OfficialRecords bin={bin} />
       {p && p.completeness !== null && (
         <section>
           <h3 className="section-title">Data completeness</h3>

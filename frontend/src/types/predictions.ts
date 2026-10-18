@@ -23,6 +23,10 @@ export interface RecordEvent {
   date: string | null;
   type: string;
   description: string;
+  /** FISP cycle of a façade filing, when known (used to link to the official record). */
+  cycle?: number | null;
+  /** Official identifier of the record, e.g. the FISP TR6 report number. */
+  reference?: string | null;
 }
 
 export interface SourceRef {

@@ -172,6 +172,8 @@ function parseMlServiceRecord(r: Json): Candidate | string {
         date: str(h.filed_on),
         type: ML_STATUS_TYPE,
         description: `Cycle ${num(h.cycle) ?? '?'}: ${str(h.status) ?? 'unknown'}`,
+        cycle: num(h.cycle),
+        reference: str(h.reference),
       }))
       .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')),
     consequence: {},

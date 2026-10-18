@@ -122,11 +122,16 @@ def train_vantage_model(ctx: Context, now: pd.Timestamp):
 
 
 def fisp_history(fac: pd.DataFrame) -> dict[str, list[dict]]:
+    """Per building and cycle: the worst Initial status, first filing date and the TR6 report number of the
+    filing that carries that status (so the frontend can link to the exact official record)."""
     ini = fac[fac["filing_type"].eq("Initial") & fac["severity"].notna()]
-    per = (ini.groupby(["bin", "cycle"]).agg(sev=("severity", "max"), filed=("observed_on", "min"))
+    ini = ini.sort_values(["bin", "cycle", "severity", "observed_on"], ascending=[True, True, False, True])
+    per = (ini.groupby(["bin", "cycle"]).agg(sev=("severity", "first"), reference=("tr6_no", "first"),
+                                             filed=("observed_on", "min"))
            .reset_index().sort_values(["bin", "cycle"]))
     return {b: [{"cycle": int(r.cycle), "status": STATUS_NAME[int(r.sev)],
-                 "filed_on": None if pd.isna(r.filed) else str(r.filed.date())} for r in g.itertuples()]
+                 "filed_on": None if pd.isna(r.filed) else str(r.filed.date()),
+                 "reference": r.reference if isinstance(r.reference, str) else None} for r in g.itertuples()]
             for b, g in per.groupby("bin")}
 
 
