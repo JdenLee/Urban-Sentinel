@@ -1,182 +1,139 @@
-# Urban Sentinel
+<h3 align="center">🚀 <a href="https://urban-sentinel-bay.vercel.app">Launch Urban Sentinel — interactive live demo</a></h3>
 
-**An early-warning tool that tells New York City (NYC) inspectors which building façades to check first. Its machine learning (ML) model is trained and served on IBM LinuxONE, and live predictions run on the artificial intelligence (AI) accelerator built into the IBM Z chip.**
+<h1 align="center">Urban Sentinel</h1>
 
-IBM Z Datathon 2026 · Track: **Real-Time AI for Critical Decisions** · Team **Megatronn**: Kason Lin, Jayden Lee, Aaron Munford, Tina Tran
+<p align="center"><b>Predicting which New York City buildings need a façade inspection first</b><br>
+IBM Z Datathon 2026 · Real-Time AI for Critical Decisions · Team Megatronn · Built on IBM LinuxONE</p>
 
-![Urban Sentinel three-dimensional map of Lower Manhattan, buildings coloured by predicted façade risk](docs/screenshots/map-overview.jpg)
+<p align="center"><a href="https://urban-sentinel-bay.vercel.app"><img src="docs/screenshots/map-overview.jpg" alt="Urban Sentinel's 3D map of Lower Manhattan, every building coloured by its predicted façade-inspection priority" width="100%"></a></p>
 
----
+<p align="center"><a href="#does-it-work">Results</a> · <a href="#how-it-works">How it works</a> · <a href="#why-ibm-linuxone">Why IBM LinuxONE</a> · <a href="#try-it-locally">Run it locally</a></p>
 
-## In 30 seconds
+> **Buildings are inspected every five years. Urban Sentinel helps inspectors know where to look in between.**
 
-- **The problem.** A façade is a building's outer wall. In NYC, buildings taller than six stories only get a required façade inspection **once every five years**. In between, the city mostly learns about problems from complaints, often after something has already fallen to the sidewalk.
-- **What we built.** Urban Sentinel gives every building a score: the **chance that its next required inspection will rate the façade UNSAFE**. Inspectors can then visit the riskiest buildings first. Everything is shown on an interactive three-dimensional (3D) map, with the reasons behind each score.
-- **Does it work?** We tested it on real inspections from 2020–2025 that the model had never seen. **Of the 500 buildings it would have sent inspectors to first, 66% were later rated UNSAFE.** For comparison, on the 12,116 buildings every method covers:
-
-  | Way of choosing the first 500 buildings | Share later rated UNSAFE |
-  |---|---|
-  | **Urban Sentinel** | **66%** |
-  | Each building's last inspection result | 55% |
-  | The NYC Department of Buildings (DOB) published risk score | 40% |
-  | A random pick | 26% |
-
-- **Built on IBM Z.** The whole system is **trained, tested and served on IBM LinuxONE**, IBM's Linux mainframe. Live predictions run on the **Neural Network Processing Assist (NNPA)**, the AI accelerator built into the IBM Telum chip. Its answers match the original model to within 0.0000003.
-
-### Key terms
-
-| Term | Plain meaning |
-|---|---|
-| **Façade Inspection & Safety Program (FISP)** | NYC's Local Law 11. Every building taller than six stories must have a licensed inspector check its façade every five years. Each five-year round is called a **cycle**. |
-| **Inspection ratings** | An inspector gives one of three ratings. **SAFE**: no problems. **Safe With A Repair and Maintenance Program (SWARMP)**: safe for now, but repairs are needed. **UNSAFE**: the façade is a danger and must be fixed right away. |
-| **Model** | A computer program that learns patterns from past records and uses them to predict what will happen next. |
-| **IBM LinuxONE / IBM Z** | IBM's mainframe computers, built for reliable, secure, high-volume work. LinuxONE is the version that runs Linux. |
-| **Precision in the top 500** | Of the 500 buildings ranked riskiest, how many really turned out UNSAFE. Higher is better. |
-| **Precision–recall area under the curve (PR-AUC)** | One number from 0 to 1 that sums up how well a ranking puts truly UNSAFE buildings near the top. Higher is better; a random ranking scores about 0.25 here. |
+Urban Sentinel scores every building in NYC's façade inspection program with **the chance that its next inspection is rated UNSAFE**. The scores are trained on real city records, tested on inspections the model never saw, and computed on **IBM LinuxONE**, where live requests run on the IBM Z AI accelerator.
 
 ---
 
-## 1. The problem
+## The problem: five years between inspections
 
-Failing infrastructure is expensive, and ordinary people pay for it:
+A façade is a building's outer wall. Under NYC's Local Law 11 (the Façade Inspection & Safety Program, FISP), every building taller than six stories must have its façade inspected **once every five years**. About **13,000 buildings** file each cycle, and **about 1 in 4 is rated UNSAFE**.
 
-- **$391–647 billion a year** in disruption costs to households and businesses in low- and middle-income countries ([World Bank, *Lifelines*, 2019](https://blogs.worldbank.org/en/climatechange/pipes-prosperity-resilient-infrastructure-opportunity)).
-- **$668 million a year**, equal to 1.8% of gross domestic product (GDP), in losses to businesses in a single country, Tanzania (same report).
-- **$3,300 per United States (US) household per year**, and **$10 trillion in lost US GDP over two decades**, if infrastructure investment stays where it is ([American Society of Civil Engineers (ASCE), *Failure to Act*, 2021](https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2021/01/12/deteriorating-infrastructure-and-growing-investment-gap-will-reduce-us-gdp)).
+Between inspections, the city learns about problems mostly from complaints and violations, often after something has already fallen. In December 2019, architect Erica Tishman was killed by façade debris from 729 Seventh Avenue, a building with an open façade violation ([Commercial Observer](https://commercialobserver.com/2019/12/729-seventh-avenue-erica-tishman-construction-death/)).
 
-**Building façades are where this becomes a street-level safety issue.** Under FISP, about **13,000 buildings** file an inspection report each cycle, and **roughly 1 in 4 first reports is rated UNSAFE**. Between cycles, the city learns about problems mainly from complaints and violations, so it reacts after the fact.
+The records that could warn us already exist: inspection history, violations and building data. The question is:
 
-In December 2019, architect Erica Tishman was killed by façade debris falling from 729 Seventh Avenue. The building had an open façade violation from April that year ([Commercial Observer](https://commercialobserver.com/2019/12/729-seventh-avenue-erica-tishman-construction-death/)). Inspectors have limited time, so **the critical decision is which buildings to look at first.**
+> **Which buildings should inspectors investigate first?**
 
-## 2. Our solution
+## Our solution: from reactive to proactive
 
-| Before: reactive | After: Urban Sentinel |
+| Today | With Urban Sentinel |
 |---|---|
-| A façade is inspected once every 5 years, on a fixed schedule | Every building gets a **risk score**, updated as new city records arrive |
-| Problems surface through complaints, often after damage is visible | A **ranked inspection shortlist**, sized to how many inspections the team can do |
-| No view of which of ~13,000 buildings is most likely to fail next | **Reasons** for each score: past ratings, violations, building traits |
-| Decisions made one building at a time | A **3D city map** for planning, with search and building history |
+| Inspections on a fixed five-year cycle | **Inspection priorities** that can be re-scored whenever new public records arrive |
+| Records scattered across city datasets | One **AI prediction** per building, grounded in government records |
+| Problems found after complaints or damage | **Explainable evidence**: the factors behind every score |
+| Buildings handled one at a time | An **interactive 3D map** and an **inspection shortlist** sized to the team's capacity |
 
-**Key features**
+"Re-scored whenever new records arrive" means the pipeline can be re-run on fresh public data. We do not measure façades continuously, and automated citywide refresh is future work.
 
-| Feature | What it does |
-|---|---|
-| **Risk map** | A 3D map of Lower Manhattan with 1,568 scored buildings, coloured Critical / High / Medium / Low, plus 375 buildings showing their already-filed cycle-10 result |
-| **Inspection shortlist** | The top buildings for a chosen number of inspections, downloadable as a spreadsheet (comma-separated values, CSV) |
-| **Recalculate on IBM Z** | Re-scores a building live on LinuxONE and shows which hardware did the work (the NNPA accelerator or the main processor), the result and how long it took |
-| **Why this building?** | The top factors behind each score, in plain language |
-| **Satellite ground motion** | Ground movement measured from space, shown as a separate background layer |
-| **Search and history** | Look up any NYC address or Building Identification Number (BIN) and see its inspection and violation record |
-| **Building profile** | A real aerial photo of the selected building with its footprint outlined (New York State orthoimagery, 2022–25), a photo for named landmarks, a Street View link, and floors, units and floor area from NYC MapPLUTO |
+## Explore Urban Sentinel
 
-![Building detail: rank, probability, warning signals and the Recalculate on IBM Z button](docs/screenshots/building-panel.jpg)
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/building-panel.jpg" alt="Selected building: 87% predicted probability of an UNSAFE filing, aerial photo with footprint outlined, building facts"><br><b>Every building, explained.</b> Click any building to see its predicted probability, its priority tier, a real aerial photo and its building facts.</td>
+<td width="50%"><img src="docs/screenshots/why-this-score.jpg" alt="Why this score: the recorded façade status, tax-lot size and prior façade violations that raised this building's prediction"><br><b>Why this score?</b> The factors that pushed each prediction up or down, from the model's own explanations (TreeSHAP).</td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/inspection-shortlist.jpg" alt="Inspection shortlist: the 25 highest-priority buildings for a capacity of 25 inspections, with CSV export"><br><b>Where to inspect first.</b> Set the inspection capacity and get a ranked shortlist, downloadable as a CSV file.</td>
+<td width="50%"><img src="docs/screenshots/satellite-layer.jpg" alt="NASA OPERA satellite ground-motion layer over Lower Manhattan, with its legend and data period"><br><b>Ground motion from space.</b> NASA OPERA radar measurements of ground movement, shown as a separate map layer.</td>
+</tr>
+</table>
 
-## 3. How it works
+**Try this in the live demo**
+1. Open the [live demo](https://urban-sentinel-bay.vercel.app) and drag to orbit the 3D map.
+2. Search for a landmark, an address or a Building Identification Number (BIN), such as `Woolworth` or `1078030`.
+3. Click a building and open **Why this score?** and **History**.
+4. Open **Explore priorities & layers**, move the **Capacity** slider and watch the shortlist update. Switch on **Satellite movement**.
+5. Press **Start tour** for a guided walkthrough.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="ml/reports/figures/architecture_dark.png">
-  <img alt="Architecture: NYC Open Data feeds a pipeline on IBM LinuxONE; the model is trained there and served by IBM Snap ML on the NNPA accelerator; the 3D map connects to it securely" src="ml/reports/figures/architecture_light.png">
-</picture>
+The public demo runs entirely on the **real predictions exported from IBM LinuxONE** (the status bar reads *Exported snapshot · IBM LinuxONE (s390x)*). Two features need our private LinuxONE service and work only on the team's machines: **live recalculation on IBM Z** and **full violation and complaint history**. The public site says so where they appear, and shows the inspection filings saved with the predictions.
 
-1. **Collect.** We download public records from NYC Open Data and note where and when each one came from.
-2. **Describe each building.** For every building we calculate 73 facts ("features") using **only records dated before the day of the prediction**, so the model never peeks at the future:
-   - façade history: past ratings, repairs, late or missed filings;
-   - DOB façade and structural violations back to 1998;
-   - wall-maintenance violations from the Environmental Control Board (ECB);
-   - building traits: age, number of floors, lot size, use.
-3. **Learn.** The model learns from FISP cycles 7–9 which combinations of facts came before an UNSAFE rating. Its scores are adjusted so that "30%" really means about 30 in 100 such buildings.
-4. **Explain.** For each building, the model reports which facts pushed its score up or down.
-5. **Serve on IBM Z.** A service on LinuxONE answers requests using the NNPA accelerator. Before switching the accelerator on, it checks that its answers match the original model on 500 buildings.
-6. **Show.** The 3D map loads the scores produced on LinuxONE and can ask the live service to re-score any building.
+## Does it work?
 
-<details>
-<summary><b>Technical details</b></summary>
-
-- **Model:** gradient-boosted decision trees (XGBoost), calibrated with Platt scaling. Explanations use TreeSHAP (SHapley Additive exPlanations for tree models).
-- **Leakage guard:** a hard check plus unit tests stop any record dated after the decision date from entering the features.
-- **Serving:** a FastAPI application programming interface (API) loads the model into IBM Snap ML using the `zdnn_tensors` tree format on the NNPA. If the start-up check fails, it serves with XGBoost on the main processor instead.
-- **Frontend:** React, MapLibre and deck.gl.
-
-</details>
-
-## 4. Data
-
-All of these are free public datasets.
-
-| Source | What we use it for |
-|---|---|
-| [DOB NOW: Façade Compliance Filings](https://data.cityofnewyork.us/d/xubg-57si) (87,000 filings, cycles 6–10) | The **outcomes we predict** (SAFE / SWARMP / UNSAFE) and each building's façade history |
-| [DOB Violations](https://data.cityofnewyork.us/d/3h2n-5cm9) | Façade, filing and unsafe-building violations since 1998 |
-| [DOB ECB Violations](https://data.cityofnewyork.us/d/6bgk-3dad) | Failure to maintain walls, façade report not filed, sidewalk sheds |
-| [NYC Primary Land Use Tax Lot Output (PLUTO)](https://data.cityofnewyork.us/d/64uk-42ks) | Building age, floors, lot size, building type, location |
-| [NYC Building Footprints](https://data.cityofnewyork.us/d/5zhs-2jue) | Building shapes for the 3D map |
-| Satellite ground-motion data (Interferometric Synthetic Aperture Radar, InSAR) | Background layer on the map |
-| [DOB façade risk scores](https://github.com/NYCDOB/FacadeRisk) (2022) | **For comparison only.** We measure ourselves against it; our model does not use it |
-| DOB Complaints | Tested; it **did not help**, so it is not used |
-
-## 5. Results
-
-All results come from a **test that respects time**. The model only learned from records before 21 February 2020. We then checked its ranking against what licensed inspectors actually recorded in the 2020–2025 cycle: 13,327 buildings, 25% of them rated UNSAFE.
+We tested on what really happened. The model learned only from records before **21 February 2020**. We then compared its ranking with the ratings licensed inspectors recorded in the 2020–2025 cycle.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="ml/reports/figures/precision_at_500_dark.png">
   <img alt="Share of the top 500 buildings later rated UNSAFE: Urban Sentinel 66.0%, logistic regression 58.4%, last-inspection rule 55.4%, NYC DOB published score 40.2%" src="ml/reports/figures/precision_at_500_light.png">
 </picture>
 
-| 2020–2025 test (all 13,327 buildings) | PR-AUC (higher is better) | Share of top 500 rated UNSAFE |
-|---|---|---|
-| Random pick | 0.25 | 25% |
-| Simple rule: rank by last inspection result | 0.358 | 56.0% |
-| Standard statistical model (logistic regression) on history | 0.389 | 58.2% |
-| **Urban Sentinel** | **0.454** | **66.2%** |
+**Of the 500 buildings Urban Sentinel would inspect first, 66% were later rated UNSAFE**, against 55% when ranking by each building's last inspection result. That is **about 50 more UNSAFE façades found with the same 500 inspections**. It also beats the NYC Department of Buildings' published 2022 risk score (40%) and a random pick (26%). All four numbers come from the same 12,116 buildings, the ones every method scores.
 
-Compared with the simple rule, Urban Sentinel finds **10 more truly UNSAFE buildings in every 100 it flags**. Even allowing for chance, the gain is between 5 and 15 per 100 (95% confidence interval, CI). Its PR-AUC is 0.096 higher (95% CI +0.083 to +0.108).
+- **It finds new problems, not just repeat offenders.** Among buildings rated SAFE last time, 38% of the 250 it ranks riskiest turned UNSAFE, about twice the 18% expected by chance ([chart](ml/reports/figures/previously_safe_light.png)).
+- **Higher scores mean higher risk.** The top 10% of scores were rated UNSAFE 57% of the time; the bottom 10%, 7% ([chart](ml/reports/figures/cycle9_deciles_light.png)).
+- **The same result on IBM Z.** Re-run on LinuxONE (s390x), the blind test gives 66.0% in the top 500 across all 13,327 buildings ([s390x report](ml/reports/linuxone/RESULTS.md)).
 
-**It finds new problems, not just repeat offenders.** Take buildings whose last rating was SAFE. Of the 250 it ranks riskiest, **38.4%** turned UNSAFE, about twice the 18.3% you'd expect by chance:
+**What it predicts:** an officially recorded future inspection rating, not building collapse or certain physical danger. Unscored or low-scored buildings are not "safe".
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="ml/reports/figures/previously_safe_dark.png">
-  <img alt="Previously SAFE buildings: share of the top 250 flagged that turned UNSAFE. Urban Sentinel 38.4%, façade-only model 32.4%, logistic regression 25.2%, rule 20.4%; base rate 18.3%" src="ml/reports/figures/previously_safe_light.png">
-</picture>
+<details>
+<summary><b>How we kept it honest</b></summary>
 
-**Higher scores really mean higher risk.** The 10% of buildings with the highest scores were rated UNSAFE 57% of the time; the lowest 10%, only 7%:
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="ml/reports/figures/cycle9_deciles_dark.png">
-  <img alt="Actual UNSAFE rate for each tenth of buildings by predicted risk, falling from 57% in the top tenth to 7% in the bottom tenth" src="ml/reports/figures/cycle9_deciles_light.png">
-</picture>
-
-**How we kept it honest**
-
-- **No peeking at the answers.** Three penalty fields in the filings data have no date and are filled in after the inspection. Using them would have made the model look far better than it is (PR-AUC 0.552 instead of 0.379), so we left them out ([audit](ml/reports/leakage_audit.json)).
-- **Fair comparisons.** Every method is judged on the same buildings, with the same information. On 12,116 identical buildings, our model beats DOB's 2022 score (PR-AUC 0.461 vs 0.341), even though DOB's model may already have seen these outcomes.
-- **Uncertainty reported.** Every comparison comes with a 95% confidence interval, so you can see how much of a gain could be luck.
-- **Satellite data tested.** Ground-motion data from satellites did not improve predictions, so it appears on the map as background only.
-
-![Satellite ground-motion layer on the map](docs/screenshots/satellite-layer.jpg)
+- **No peeking at the future.** Every feature uses only records dated before the decision date, enforced by a hard check and unit tests. Three undated penalty fields would have inflated the results (PR-AUC 0.552 instead of 0.379), so they are excluded ([leakage audit](ml/reports/leakage_audit.json)).
+- **Same buildings, same information.** Every method is compared on an identical set of buildings. DOB's 2022 score may already have seen some of these outcomes, which favours DOB, and it still ranks lower. In a matched-date test on later filings, the gap is wider: 68% vs 48% ([results](ml/reports/linuxone/RESULTS.md)).
+- **Uncertainty reported.** Every comparison has a 95% confidence interval (CI). Against the last-inspection rule, the top-500 gain is +10.2 points (95% CI +5.0 to +14.8) on all 13,327 buildings.
+- **Calibrated.** A predicted 30% means about 30 in 100 such buildings are rated UNSAFE.
 
 Full tables: [`ml/reports/RESULTS.md`](ml/reports/RESULTS.md) · What each data source adds: [`ml/reports/ABLATION.md`](ml/reports/ABLATION.md)
 
-## 6. Why IBM Z and LinuxONE
+</details>
 
-- **Everything runs on LinuxONE.** Downloading data, testing, training the model (about 20 seconds), scoring 13,650 buildings and running the live service all happen on our IBM LinuxONE virtual machine (VM).
-- **AI built into the chip.** The IBM Telum processor includes the NNPA accelerator. IBM Snap ML runs our model on it, and its predictions match the original to within **0.00000038 across all 13,650 buildings**, with the identical top 500.
-- **Real-time answers.** A live request is scored in **0.122 milliseconds on the NNPA, versus 0.358 milliseconds on the main processor**, about 3 times faster (median of 200 real requests). The full round trip, including gathering the building's latest records, takes about 86 milliseconds. For scoring all buildings at once the main processor is faster, so we use the NNPA for live, one-at-a-time requests.
-- **Same answers on any hardware.** An automatic test confirms the mainframe gives the same predictions as a laptop.
-- **Secure by default.** The live service is not open to the internet; it can only be reached through an encrypted connection. Retraining requires a password-like token, and no secrets are stored in the code.
+## Built on real government data
+
+No synthetic training data: every record comes from public, government-maintained datasets that their publishers keep updating.
+
+| Source | Role |
+|---|---|
+| [DOB NOW: Façade Compliance Filings](https://data.cityofnewyork.us/d/xubg-57si): **87,379 filings**, cycles 6–10 | **Model:** the outcomes we predict, and each building's façade history |
+| [DOB Violations](https://data.cityofnewyork.us/d/3h2n-5cm9) | **Model:** façade, filing and unsafe-building violations since 1998 |
+| [DOB ECB Violations](https://data.cityofnewyork.us/d/6bgk-3dad) | **Model:** failure to maintain walls, façade report not filed, sidewalk sheds |
+| [MapPLUTO](https://data.cityofnewyork.us/d/64uk-42ks) | **Model:** building age, floors, lot size and type. **Map:** building facts panel |
+| [NYC Building Footprints](https://data.cityofnewyork.us/d/5zhs-2jue) | **Map:** building shapes for the 3D city |
+| [NASA OPERA DISP-S1](https://www.earthdata.nasa.gov/data/projects/opera) radar ground motion (InSAR) | **Map layer:** measured ground movement over time. Tested in the model: no significant improvement, so it is not a model input |
+| DOB complaints (311) | **Tested, not used:** it did not improve predictions. Shown in building history when the LinuxONE service is connected |
+| [DOB FacadeRisk scores](https://github.com/NYCDOB/FacadeRisk) (2022) | **Benchmark only:** what we compare against |
+| [NYS orthoimagery](https://gis.ny.gov/orthoimagery) · [Wikimedia Commons](https://commons.wikimedia.org) | **Map:** aerial photos of each building, and credited photos of named landmarks |
+
+## How it works
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="ml/reports/figures/architecture_dark.png">
+  <img alt="Architecture: NYC Open Data feeds a pipeline on IBM LinuxONE; the model is trained there and served by IBM Snap ML on the NNPA accelerator; the 3D map connects to it securely" src="ml/reports/figures/architecture_light.png">
+</picture>
+
+**NYC Open Data → feature engineering (Python, pandas) → XGBoost → IBM LinuxONE + Snap ML on the NNPA → FastAPI → React, MapLibre and deck.gl 3D map**
+
+1. **Describe each building.** 73 features (façade history, violations, building traits) are computed using only records dated before the prediction date.
+2. **Train and test.** Gradient-boosted trees (XGBoost) learn which combinations came before an UNSAFE rating, with probabilities calibrated by Platt scaling and explained with TreeSHAP.
+3. **Score on IBM Z.** The trained model scores every building on LinuxONE. The scores are exported for the map, and served live through a FastAPI service.
+4. **Serve fast.** Live requests run the same trees on IBM Snap ML on the NNPA accelerator. The accelerator speeds up inference; it does not change the model's accuracy.
+
+## Why IBM LinuxONE
+
+The whole machine-learning pipeline ran on **IBM LinuxONE (s390x)**: data preparation, training, evaluation, scoring and the live API.
+
+- **The AI accelerator, verified.** The IBM Telum chip's **Neural Network Processing Assist (NNPA)** runs our model through IBM Snap ML and zDNN. Before switching it on, the service checks that its predictions match CPU XGBoost; the largest difference across all 13,650 buildings is **0.00000038**.
+- **Real-time answers.** One building is scored in **0.12 ms on the NNPA vs 0.36 ms on the CPU: 2.9× faster** (model-only inference, median of 200 live requests). A full request, including gathering the building's latest records, takes about 86 ms. For large batches the CPU is faster, so the NNPA serves one-at-a-time live requests.
+- **Secure by default.** The API listens only on the VM's local address and is reached through an SSH tunnel. No secrets are stored in the code.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="ml/reports/figures/nnpa_latency_dark.png">
-  <img alt="Time to score on the LinuxONE machine: one request at a time, Snap ML on the NNPA is several times faster than the main processor; in large batches it is slower; predictions are identical" src="ml/reports/figures/nnpa_latency_light.png">
+  <img alt="Time to score on LinuxONE: one request at a time, Snap ML on the NNPA is about 2.9× faster than the CPU; in large batches it is slower; predictions are identical" src="ml/reports/figures/nnpa_latency_light.png">
 </picture>
 
-<details>
-<summary><b>Technical details and evidence</b></summary>
+**Stack:** IBM LinuxONE · RHEL 9.8 · Podman · JupyterLab (`jupyterlab-image-s390x`) · Python · pandas · XGBoost · IBM Snap ML · zDNN · FastAPI
 
-- **Machine:** Red Hat Enterprise Linux (RHEL) 9.8 on s390x (IBM Z's big-endian processor architecture), running IBM's `jupyterlab-image-s390x` container under Podman.
-- **Accelerator library:** IBM Z Deep Neural Network (zDNN) library 1.1.2 confirms the NNPA. Snap ML compiles the trees to the `zdnn_tensors` format.
-- **Cross-hardware test:** a parity test checks that predictions match between an arm64 laptop and the s390x mainframe.
-- **Security:** the API listens on the VM's local address only and is reached through a Secure Shell (SSH) tunnel.
+<details>
+<summary><b>Evidence from the LinuxONE machine</b></summary>
 
 What the running service reports (`GET /health` on the VM):
 
@@ -186,63 +143,57 @@ What the running service reports (`GET /health` on the VM):
                       "parity_rows": 500, "parity_max_abs_diff": 2.87e-07 }
 ```
 
-Raw evidence captured on the VM is in [`ml/reports/linuxone/`](ml/reports/linuxone/README.md). It includes the run record, the s390x evaluation report, the NNPA benchmark, live service responses and timing measurements.
+- Raw evidence (run record, s390x evaluation, NNPA benchmark, live responses, timings): [`ml/reports/linuxone/`](ml/reports/linuxone/README.md)
+- Deployment guide: [LinuxONE runbook](ml/deploy/linuxone/RUNBOOK.md)
+- Executable notebooks for LinuxONE JupyterLab: [`ml/notebooks/`](ml/notebooks/README.md)
 
 </details>
 
-## 7. Try it
-
-**3D map.** It works offline, using the scores exported from LinuxONE.
+## Try it locally
 
 ```bash
-cd frontend && npm ci && npm run dev
+git clone https://github.com/JdenLee/Urban-Sentinel.git
+cd Urban-Sentinel/frontend && npm ci && npm run dev     # 3D map on the LinuxONE snapshot
+npm run build                                           # production build
 ```
 
 <details>
 <summary><b>Live predictions and the ML pipeline</b></summary>
 
-**Live predictions** (needs access to the team's LinuxONE VM): open an SSH tunnel with `ssh -N -L 8000:127.0.0.1:8000 linux1@<vm>`. The map then switches to the live service, and **Recalculate on IBM Z** scores buildings on the mainframe. Setup steps are in the [LinuxONE runbook](ml/deploy/linuxone/RUNBOOK.md).
+- **Live predictions** need access to the team's LinuxONE VM: open an SSH tunnel to port 8000, and the map switches to the live service, with **Run on LinuxONE** and full building history. Steps: [LinuxONE runbook](ml/deploy/linuxone/RUNBOOK.md) and [`frontend/LINUXONE_LIVE.md`](frontend/LINUXONE_LIVE.md).
+- **ML pipeline** (laptop or LinuxONE, Python 3.12):
 
-**ML pipeline** (laptop or LinuxONE; Python 3.12):
+  ```bash
+  pip install -r ml/requirements.txt
+  cd ml && python -m pytest tests -q        # includes leakage guards and s390x parity
+  python -m urban_sentinel.pipeline         # download → evaluate → train → score
+  ```
 
-```bash
-pip install -r ml/requirements.txt
-cd ml && python -m pytest tests -q            # 16 tests, incl. leakage guards and s390x parity
-python -m urban_sentinel.pipeline             # download → evaluate → train → score
-```
+- **Hosting:** the public demo is a static Vercel deploy. See [`frontend/README.md`](frontend/README.md#public-demo-vercel).
 
 </details>
 
-## 8. Limitations and next steps
+## Limitations and what's next
 
-**Limitations**
-- **We predict what an inspector will record, not whether a building will collapse.** Buildings that never file a report have no recorded outcome, so there are fewer of them in the training data.
-- **The map shows Lower Manhattan only.** The model scores 13,650 buildings across the whole city, but the 3D demo covers a smaller area.
-- **Some building facts (from PLUTO) are a 2026 snapshot,** not the values at the time of each past prediction. Most of them, like age and size, rarely change. Even without them, the model still beats the simple rule (PR-AUC 0.424).
+- **Decision support, not a replacement for inspectors.** It ranks buildings for review; a licensed professional must inspect.
+- **It predicts recorded ratings.** Buildings that never file have no outcome to learn from. Some PLUTO facts are a 2026 snapshot (without them the model still beats the rule: PR-AUC 0.424).
+- **The 3D map covers Lower Manhattan**; the model scores about 13,800 buildings citywide.
+- **Next:** validation with NYC DOB inspectors, automated public-data refresh and re-scoring, richer building-condition data, and other cities with façade laws.
 
-**Next steps**
-- **A citywide map that re-scores automatically** as new filings and violations arrive. The re-scoring endpoint already exists.
-- **Field testing with NYC DOB:** compare our shortlist with the buildings inspectors check on their own initiative.
-- **Using a large language model (LLM)** to read inspection reports and pull out the types of defects found.
-- **Other cities** that have similar façade-inspection laws.
+## Team and credits
 
-## Repository
+**Team Megatronn:** Kason Lin, Jayden Lee, Aaron Munford, Tina Tran
 
 | Folder | What's inside |
 |---|---|
-| [`ml/`](ml/README.md) | Data pipeline, model, evaluation, live service, LinuxONE setup guide, figures and evidence |
+| [`ml/`](ml/README.md) | Data pipeline, model, evaluation, live service, LinuxONE setup, figures and evidence |
 | [`ml/insar/`](ml/insar/README.md) | Satellite ground-motion processing |
 | [`frontend/`](frontend/README.md) | 3D map (React, MapLibre, deck.gl) |
 
-## Built with
-
 **IBM:** [IBM LinuxONE Community Cloud](https://linuxone.cloud.marist.edu), [IBM Snap ML](https://snapml.readthedocs.io), [zDNN](https://github.com/IBM/zDNN), [jupyterlab-image-s390x](https://github.com/linuxone-community-cloud/jupyter-lab-ml).
 
-**Open source:**
-- ML and data: [pandas](https://pandas.pydata.org), [NumPy](https://numpy.org), [scikit-learn](https://scikit-learn.org), [XGBoost](https://xgboost.ai), [matplotlib](https://matplotlib.org), [opera-utils](https://github.com/opera-adt/opera-utils).
-- Service: [FastAPI](https://fastapi.tiangolo.com), [Uvicorn](https://www.uvicorn.org).
-- Frontend: [React](https://react.dev), [Vite](https://vitejs.dev), [MapLibre GL JS](https://maplibre.org), [deck.gl](https://deck.gl), [react-map-gl](https://visgl.github.io/react-map-gl), [Vitest](https://vitest.dev).
+**Open source:** [pandas](https://pandas.pydata.org), [NumPy](https://numpy.org), [scikit-learn](https://scikit-learn.org), [XGBoost](https://xgboost.ai), [matplotlib](https://matplotlib.org), [opera-utils](https://github.com/opera-adt/opera-utils), [FastAPI](https://fastapi.tiangolo.com), [Uvicorn](https://www.uvicorn.org), [React](https://react.dev), [Vite](https://vitejs.dev), [MapLibre GL JS](https://maplibre.org), [deck.gl](https://deck.gl), [react-map-gl](https://visgl.github.io/react-map-gl), [Vitest](https://vitest.dev).
 
-**Data:** NYC Open Data. Satellite data from the National Aeronautics and Space Administration (NASA) Observational Products for End-Users from Remote Sensing Analysis (OPERA) project, via the Alaska Satellite Facility Distributed Active Archive Center (ASF DAAC). Basemap © [OpenFreeMap](https://openfreemap.org) / [OpenMapTiles](https://openmaptiles.org) / [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.
+**Data:** NYC Open Data. Satellite data from NASA's Observational Products for End-Users from Remote Sensing Analysis (OPERA) project via the Alaska Satellite Facility DAAC. Aerial imagery: NYS ITS Geospatial Services. Landmark photos: Wikimedia Commons contributors, credited in the app. Basemap © [OpenFreeMap](https://openfreemap.org) / [OpenMapTiles](https://openmaptiles.org) / [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.
 
 *Urban Sentinel is a decision-support tool: it ranks buildings for human review. Field inspection by a licensed professional is always required.*
