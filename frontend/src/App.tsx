@@ -16,6 +16,7 @@ import { DEFAULT_HEIGHT_M, featureCentroid, joinByBin } from './data/joinByBin';
 import { fetchFootprint, fetchHistory } from './data/loadHistory';
 import { useAssignments } from './data/shortlist';
 import { INITIAL_CAMERA, prefersReducedMotion } from './camera';
+import { formatDate } from './data/formatDate';
 import { API_BASE } from './config';
 import {
   PRIORITIES,
@@ -50,11 +51,7 @@ function toJoined(f: BuildingFeature): JoinedFeature {
   };
 }
 
-const fmtDate = (s: string | null) => {
-  if (!s) return '—';
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? s : d.toISOString().slice(0, 10);
-};
+const fmtDate = formatDate;
 
 export default function App() {
   const [load, setLoad] = useState<LoadState>({ status: 'loading' });
