@@ -1,37 +1,49 @@
-import { useCallback, useRef } from 'react';
+import { useMemo, useRef } from 'react';
+
+type PressPointerEvent = { button: number; pointerType: string };
+type PressClickEvent = { detail: number };
 
 /**
- * Activate on pointer-down instead of click.
+ * The press logic without React, so it can be tested directly.
+ *
+ * Mouse and pen activate on pointer-down. Touch keeps the click: on a touch screen the same
+ * pointer-down also begins a scroll, and the browser cancels the click when the finger moves, which
+ * is the only way to tell a tap from a swipe across a list. Touch also fires pointerleave before
+ * click, so a guard cleared on leave cannot suppress the click that follows a touch press.
+ *
+ * The click suppressed after a pointer activation is identified by `detail`: pointer-generated
+ * clicks count presses (detail >= 1), while Enter, Space and assistive technology synthesise clicks
+ * with detail 0, so the keyboard path always activates even after a press that slid off its target.
+ */
+export function pressHandlers(activate: () => void, firedByPointer: { current: boolean }) {
+  return {
+    onPointerDown(e: PressPointerEvent) {
+      firedByPointer.current = e.button === 0 && e.pointerType !== 'touch';
+      if (firedByPointer.current) activate();
+    },
+    onClick(e: PressClickEvent) {
+      const alreadyFired = firedByPointer.current && e.detail !== 0;
+      firedByPointer.current = false;
+      if (!alreadyFired) activate();
+    },
+  };
+}
+
+/**
+ * Activate on pointer-down instead of click, for mouse and pen.
  *
  * Waiting for the release costs the whole press duration — perceptible on a map, where the camera
- * should already be moving by the time the finger lifts. The click handler stays as the keyboard
- * path (Enter and Space synthesise a click with no pointer sequence) and is suppressed when the
- * pointer already fired.
+ * should already be moving by the time the button comes up. See `pressHandlers` for touch and keyboard.
  */
 export function usePress<T extends HTMLElement>(activate: () => void) {
   const firedByPointer = useRef(false);
-
-  const onPointerDown = useCallback(
-    (e: React.PointerEvent<T>) => {
-      if (e.button !== 0) return;
-      firedByPointer.current = true;
-      activate();
-    },
-    [activate],
-  );
-
-  const onClick = useCallback(() => {
-    if (firedByPointer.current) {
-      firedByPointer.current = false;
-      return;
-    }
-    activate();
-  }, [activate]);
-
-  // A press that slides off the target never produces a click, so the guard is cleared here too.
-  const onPointerLeave = useCallback(() => {
-    firedByPointer.current = false;
+  const activateRef = useRef(activate);
+  activateRef.current = activate;
+  return useMemo(() => {
+    const h = pressHandlers(() => activateRef.current(), firedByPointer);
+    return {
+      onPointerDown: (e: React.PointerEvent<T>) => h.onPointerDown(e),
+      onClick: (e: React.MouseEvent<T>) => h.onClick(e),
+    };
   }, []);
-
-  return { onPointerDown, onClick, onPointerLeave };
 }

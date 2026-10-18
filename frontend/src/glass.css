@@ -453,7 +453,8 @@ body { background: #000; font: var(--t-body) var(--font); color: var(--label); }
   height: 36px; border-radius: var(--r-control); overflow: hidden;
   font: var(--t-footnote) var(--font);
 }
-.statusbar__group { display: flex; align-items: stretch; min-width: 0; }
+/* Groups never shrink either: a squeezed group lets its readouts spill over the next one. */
+.statusbar__group { display: flex; align-items: stretch; flex: none; }
 .statusbar__group + .statusbar__group { border-left: 1px solid var(--separator); }
 /* Readouts never compress: a squeezed measure is a misread one. The bar sheds them in order. */
 .readout { flex: none; display: flex; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-3); white-space: nowrap; }

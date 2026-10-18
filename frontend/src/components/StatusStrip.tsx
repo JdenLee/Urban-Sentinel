@@ -4,9 +4,11 @@ import { sunState } from '../data/sunPosition';
 import { formatDate } from '../data/formatDate';
 
 /**
- * Measured per-score inference time on the deployed service, median over 200 real requests.
- * Both engines run the same model on the same LinuxONE machine, so the pair is a like-for-like
- * reading rather than a vendor claim. Nothing here is estimated; see README.md.
+ * Measured model-inference time per score on the deployed service, median over 200 real requests
+ * (ml/reports/linuxone/latency_s390x.json). Both engines run the same model on the same LinuxONE
+ * machine, so the pair is a like-for-like reading rather than a vendor claim. It covers the model
+ * call only: the full request (about 86 ms) is dominated by rebuilding the building's features and
+ * is the same on both engines, and energy was not measured, so neither is claimed here.
  */
 const INFERENCE_MS = { nnpa: 0.122, cpu: 0.358 };
 
@@ -39,7 +41,7 @@ function Readout({ label, value, title, drop, accent }: {
 /** Floating status bar: what is on screen, where it came from, and what it cost to compute. */
 export function StatusStrip({ scored, mapped, dataAsOf, platform, isMock, selectedBin, movementOn }: StatusStripProps) {
   const sun = useMemo(() => sunState(new Date(), INITIAL_VIEW.latitude, INITIAL_VIEW.longitude), []);
-  const saved = 1 - INFERENCE_MS.nnpa / INFERENCE_MS.cpu;
+  const speedup = INFERENCE_MS.cpu / INFERENCE_MS.nnpa;
 
   return (
     <footer className="statusbar" aria-label="Session readouts">
@@ -60,14 +62,14 @@ export function StatusStrip({ scored, mapped, dataAsOf, platform, isMock, select
 
       <div className="statusbar__group statusbar__group--end">
         <Readout
-          label="Per score"
+          label="Model inference"
           value={`${INFERENCE_MS.nnpa.toFixed(3)} ms NNPA · ${INFERENCE_MS.cpu.toFixed(3)} ms CPU`}
-          title="Median model inference time over 200 real requests on the deployed service. Same model, same machine, two engines."
+          title="Median model-inference time per score over 200 real requests on the deployed service. Same model, same machine, two engines. The full request (about 86 ms) is mostly feature building and is the same on both."
         />
         <Readout
-          label="Compute saved"
-          value={`${(saved * 100).toFixed(0)}%`}
-          title="Energy follows compute time: the accelerator does the same work in under a third of it."
+          label="NNPA speed-up"
+          value={`${speedup.toFixed(1)}×`}
+          title="Model inference on the NNPA accelerator versus the CPU, same model and machine. Applies to the model call only, not the whole request; energy was not measured."
           accent
         />
         <Readout label="Platform" value={isMock ? 'Synthetic demo data' : platform} title="Where the scores were computed" drop />
