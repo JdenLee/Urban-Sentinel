@@ -3,7 +3,15 @@
  * (ml/deploy/linuxone/RUNBOOK.md); the committed snapshot keeps the demo working without it.
  * The same API serves building history (GET /buildings/{bin}/history) for address lookups.
  */
-export const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? 'http://localhost:8000';
+const API_SETTING = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
+/**
+ * Unset: local development through the SSH tunnel (http://localhost:8000). Empty or "off": no live API at all,
+ * as on the public demo, so visitors' browsers never send requests to their own localhost.
+ */
+export const API_BASE =
+  API_SETTING === undefined ? 'http://localhost:8000' : API_SETTING.toLowerCase() === 'off' ? '' : API_SETTING.replace(/\/$/, '');
+/** True when the live LinuxONE service is deliberately unavailable (the public demo). */
+export const PUBLIC_DEMO = API_BASE === '';
 
 export interface PredictionSource {
   id: 'live-api' | 'linuxone-snapshot' | 'mock';
@@ -17,12 +25,12 @@ const base = import.meta.env.BASE_URL;
 export const PREDICTION_SOURCES: PredictionSource[] = [
   ...((import.meta.env.VITE_PREDICTIONS_URL as string | undefined)
     ? [{ id: 'live-api' as const, label: 'Custom source', url: import.meta.env.VITE_PREDICTIONS_URL as string }]
-    : [{ id: 'live-api' as const, label: 'Live ML API', url: `${API_BASE}/predictions` }]),
+    : API_BASE ? [{ id: 'live-api' as const, label: 'Live ML API', url: `${API_BASE}/predictions` }] : []),
   { id: 'linuxone-snapshot', label: 'Exported snapshot', url: `${base}data/linuxone-predictions.json` },
   { id: 'mock', label: 'Mock data', url: `${base}data/mock-predictions.json` },
 ];
 
-export const GROUND_MOTION_SOURCES = [`${API_BASE}/layers/ground-motion.geojson`, `${base}data/insar-ground-motion.geojson`];
+export const GROUND_MOTION_SOURCES = [...(API_BASE ? [`${API_BASE}/layers/ground-motion.geojson`] : []), `${base}data/insar-ground-motion.geojson`];
 
 /** NYC Planning Labs GeoSearch (Pelias over NYC's PAD): free, no key, returns BINs for address lookup. */
 export const GEOSEARCH_URL =

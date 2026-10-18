@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { PUBLIC_DEMO } from '../config';
 import { livePlatform, rescore, type LiveResult } from '../data/liveInference';
 import { waitForResultReveal } from '../data/resultReveal';
 import { scheduleTourInference, tourInferenceKey } from '../data/tourInference';
@@ -24,6 +25,10 @@ export function LiveRescore({ bin, storedProbability, demoRunId = 0, demoActive 
 
   const run = useCallback(async (engine: 'auto' | 'xgboost', demo = false) => {
     if (demo) lastTourAttempt.current = tourInferenceKey(demoRunId, bin);
+    if (PUBLIC_DEMO) { // No service to call: the tour moves on, and nothing pretends to be live.
+      if (demo) { onDemoStart?.(); onDemoComplete?.(); }
+      return;
+    }
     request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
@@ -78,12 +83,13 @@ export function LiveRescore({ bin, storedProbability, demoRunId = 0, demoActive 
     <section className="live-rescore" aria-live="polite" aria-busy={busy !== null} data-demo="inference">
       <div className="live-rescore__head">
         <h3 className="section-title">Live inference</h3>
-        <button type="button" className="btn btn--primary btn--small" data-demo-action="run-inference" disabled={busy !== null} onClick={() => run('auto', demoWaiting)}>
-          {busy === 'auto' ? preparing ? 'Revealing result…' : 'Requesting inference…' : 'Run on LinuxONE'}
+        <button type="button" className="btn btn--primary btn--small" data-demo-action="run-inference" disabled={busy !== null || PUBLIC_DEMO} onClick={() => run('auto', demoWaiting)}>
+          {PUBLIC_DEMO ? 'LinuxONE only' : busy === 'auto' ? preparing ? 'Revealing result…' : 'Requesting inference…' : 'Run on LinuxONE'}
         </button>
       </div>
-      <p className="muted small">{live ? 'Recomputed now from cached records—not a fresh data download or retraining.' : 'Recompute this building’s saved prediction using cached records, without downloading new data or retraining.'}</p>
-      {!live && !busy && !error && <p className="muted small">Actual hardware and timing appear after the service responds.</p>}
+      {!PUBLIC_DEMO && <p className="muted small">{live ? 'Recomputed now from cached records—not a fresh data download or retraining.' : 'Recompute this building’s saved prediction using cached records, without downloading new data or retraining.'}</p>}
+      {PUBLIC_DEMO && <p className="notice small">Live recalculation runs on the team’s private IBM LinuxONE server, so it is not available in this public demo. The score shown was computed on LinuxONE and saved.</p>}
+      {!PUBLIC_DEMO && !live && !busy && !error && <p className="muted small">Actual hardware and timing appear after the service responds.</p>}
       {demoWaiting && !busy && !live && !error && <p className="live-rescore__prompt">Starting automatically for the tour…</p>}
       {busy && <div className="live-rescore__loading" role="status">
         <p className="live-rescore__progress"><span className="spinner" aria-hidden />

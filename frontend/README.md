@@ -104,6 +104,11 @@ vercel link --project urban-sentinel
 vercel deploy --prod
 ```
 
+The Vercel project sets `VITE_API_URL=off` (Production and Preview). With the API off, the site never sends
+requests to a visitor's own `localhost`, loads the LinuxONE snapshot directly, and explains in the panel that live
+recalculation and full history need the private LinuxONE service. Leaving `VITE_API_URL` unset keeps the local
+default, `http://localhost:8000`, for development through the SSH tunnel.
+
 The root `.vercelignore` uploads only `frontend/` and that one evidence file. It also keeps every `.env*`
 file out, because `VITE_*` values are compiled into the public bundle. Do not add `VITE_GOOGLE_MAPS_KEY`
 to the Vercel project: every visitor's Street View image would bill to that key.

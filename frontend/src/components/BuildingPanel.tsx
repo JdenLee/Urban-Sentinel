@@ -427,7 +427,8 @@ function HistoryNotice({ history }: { history: HistoryState }) {
   if (history.status === 'unavailable') {
     return (
       <p className="notice">
-        Building history is unavailable. You can still explore the map and available scores.
+        Live building history comes from the team’s private LinuxONE service, which this public demo cannot reach.
+        Showing the records saved with the LinuxONE predictions, plus links to the official NYC records.
       </p>
     );
   }
