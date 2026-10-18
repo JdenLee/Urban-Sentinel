@@ -61,7 +61,7 @@ In December 2019, architect Erica Tishman was killed by façade debris falling f
 
 | Feature | What it does |
 |---|---|
-| **Risk map** | A 3D map of Lower Manhattan with 1,522 scored buildings, coloured Critical / High / Medium / Low |
+| **Risk map** | A 3D map of Lower Manhattan with 1,568 scored buildings, coloured Critical / High / Medium / Low, plus 375 buildings showing their already-filed cycle-10 result |
 | **Inspection shortlist** | The top buildings for a chosen number of inspections, downloadable as a spreadsheet (comma-separated values, CSV) |
 | **Recalculate on IBM Z** | Re-scores a building live on LinuxONE and shows which hardware did the work (the NNPA accelerator or the main processor), the result and how long it took |
 | **Why this building?** | The top factors behind each score, in plain language |
