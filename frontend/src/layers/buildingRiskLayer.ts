@@ -6,6 +6,7 @@ import { FILTERED_COLOR, PRIORITY_COLOR, SELECTED_COLOR, UNSCORED_COLOR } from '
 import { featureCentroid } from '../data/joinByBin';
 import { landmarkFor } from '../data/landmarks';
 import { materialIndex, storeyHeight } from '../data/facadeMaterials';
+import type { SunState } from '../data/sunPosition';
 import { FACADE_MATERIAL } from './FacadeMaterialExtension';
 import { landmarkLayers } from './landmarkLayer';
 
@@ -20,16 +21,21 @@ const ordinaryCache = new WeakMap<JoinedFeature[], JoinedFeature[]>();
 
 /**
  * Procedural façade material, shared by every extruded body. deck.gl's layer prop types do not
- * include extension props, so the accessor is cast in once here rather than at each use.
+ * include extension props, so they are cast in once here rather than at each use.
  */
-const FACADE: Partial<GeoJsonLayerProps<JoinedFeature['properties']>> = {
-  extensions: [FACADE_MATERIAL],
-  // Per building: material class, storey spacing in metres, roof height in metres.
-  getFacadeParams: (f: JoinedFeature) => {
-    const { height_m, floors, material } = f.properties;
-    return [materialIndex(material), storeyHeight(height_m, floors, material), height_m];
-  },
-} as Partial<GeoJsonLayerProps<JoinedFeature['properties']>>;
+function facadeProps(sun: SunState): Partial<GeoJsonLayerProps<JoinedFeature['properties']>> {
+  return {
+    extensions: [FACADE_MATERIAL],
+    // Per building: material class, storey spacing in metres, roof height in metres.
+    getFacadeParams: (f: JoinedFeature) => {
+      const { height_m, floors, material } = f.properties;
+      return [materialIndex(material), storeyHeight(height_m, floors, material), height_m];
+    },
+    facadeSun: sun.toSun,
+    facadeSky: sun.sky,
+    facadeNight: sun.night,
+  } as Partial<GeoJsonLayerProps<JoinedFeature['properties']>>;
+}
 
 function ordinaryBuildings(features: JoinedFeature[]): JoinedFeature[] {
   let ordinary = ordinaryCache.get(features);
@@ -51,6 +57,8 @@ export interface BuildingLayerOptions {
   capacityCutoff: number | null;
   /** 0..1 pulse phase for the selection beacon. */
   pulse: number;
+  /** Key light and sky, shared by the lighting effect and the façade shader. */
+  sun: SunState;
   /**
    * Selected building that is not a scored footprint: a context footprint, or one fetched for a looked-up
    * address outside the demo area (`external`; drawn as its own body because the scene has no footprint).
@@ -77,13 +85,14 @@ function riskColor(f: JoinedFeature, o: BuildingLayerOptions): RGBA {
  *  - selection: wireframe shell plus a light beam above the selected building
  */
 export function buildingRiskLayers(options: BuildingLayerOptions): Layer[] {
-  const { context, scored, showRisk, selectedBin, visiblePriorities, capacityCutoff, pulse, highlight } = options;
+  const { context, scored, showRisk, selectedBin, visiblePriorities, capacityCutoff, pulse, sun, highlight } = options;
   const filterKey = [...visiblePriorities].sort().join(',');
+  const facade = facadeProps(sun);
   const layers: Layer[] = [
     new GeoJsonLayer<JoinedFeature['properties']>({
       id: 'context-buildings',
       data: ordinaryBuildings(context),
-      ...FACADE,
+      ...facade,
       extruded: true,
       filled: true,
       stroked: false,
@@ -98,7 +107,7 @@ export function buildingRiskLayers(options: BuildingLayerOptions): Layer[] {
     new GeoJsonLayer<JoinedFeature['properties']>({
       id: 'scored-buildings',
       data: ordinaryBuildings(scored),
-      ...FACADE,
+      ...facade,
       extruded: true,
       filled: true,
       stroked: false,
@@ -118,7 +127,7 @@ export function buildingRiskLayers(options: BuildingLayerOptions): Layer[] {
       new GeoJsonLayer<JoinedFeature['properties']>({
         id: 'external-highlight',
         data: [highlight.feature],
-        ...FACADE,
+        ...facade,
         extruded: true,
         filled: true,
         stroked: false,

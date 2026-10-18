@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_HEIGHT_M, joinByBin } from './joinByBin';
 import { FACADE_MATERIALS, isFacadeMaterial, materialIndex, storeyHeight } from './facadeMaterials';
+import { sunState } from './sunPosition';
 import { parseBuildings } from './loadBuildings';
 import { binString, parsePredictions } from './loadPredictions';
 import { normalisePriority, priorityFromScore, PRIORITY_RANGE } from './priority';
@@ -364,6 +365,35 @@ describe('committed demo data', () => {
     // A meaningful share must come from inspectors' filings, not from era inference alone.
     const filed = features.filter((f) => f.properties.material_source === 'filing');
     expect(filed.length).toBeGreaterThan(1000);
+  });
+});
+
+describe('solar position', () => {
+  // Lower Manhattan, checked against published almanac figures for 10:00 local.
+  const nyc = (iso: string) => sunState(new Date(iso), 40.7066, -74.0113);
+
+  it('puts the winter sun low in the south-south-east', () => {
+    const s = nyc('2026-12-21T18:00:00Z');
+    expect(s.altitudeDeg).toBeCloseTo(20.6, 0);
+    expect(s.azimuthDeg).toBeCloseTo(152, 0);
+  });
+
+  it('puts the summer sun high in the east-south-east', () => {
+    const s = nyc('2026-06-21T18:00:00Z');
+    expect(s.altitudeDeg).toBeCloseTo(49.1, 0);
+    expect(s.azimuthDeg).toBeCloseTo(101, 0);
+  });
+
+  it('uses New York morning whatever zone the viewer is in', () => {
+    // Same New York day, requested from instants 12 hours apart.
+    const a = nyc('2026-06-21T05:00:00Z');
+    const b = nyc('2026-06-21T23:00:00Z');
+    expect(a.altitudeDeg).toBeCloseTo(b.altitudeDeg, 5);
+  });
+
+  it('keeps the city in daylight, so risk colours read the same at any hour', () => {
+    expect(nyc('2026-12-21T18:00:00Z').night).toBe(0);
+    expect(nyc('2026-06-21T18:00:00Z').night).toBe(0);
   });
 });
 
