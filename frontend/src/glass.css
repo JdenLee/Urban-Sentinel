@@ -286,41 +286,20 @@ body { background: #000; font: var(--t-body) var(--font); color: var(--label); }
 .toggle__label { font: var(--t-body) var(--font); color: var(--label); }
 .toggle__hint { font: var(--t-footnote) var(--font); color: var(--label-3); }
 /*
- * Instrument switch: a machined slider in a recessed slot. Off, a dark grip block sits at the left;
- * on, it travels right, lights up, and the slot behind it fills with a charge pattern. The state
- * reads from position, colour and fill together, never colour alone.
+ * Switch: a squared slot with a small square key. On, the key moves right and takes the accent; the
+ * slot takes a faint wash of it. Position and colour both carry the state.
  */
 .toggle__track {
-  width: 46px; height: 22px; border-radius: 5px; overflow: hidden;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.38), rgba(255, 255, 255, 0.03));
-  border: 1px solid var(--separator-strong);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.55);
-  transition: border-color var(--dur-press) var(--ease-press), box-shadow var(--dur-press) var(--ease-press);
-}
-.toggle__track::before {
-  content: ''; position: absolute; top: 4px; bottom: 4px; left: 4px; width: 17px; border-radius: 2px;
-  background: repeating-linear-gradient(90deg, var(--tint) 0 2px, transparent 2px 4px);
-  opacity: 0; transform: scaleX(0.3); transform-origin: left;
-  transition: opacity var(--dur-press) var(--ease-press), transform var(--dur-press) var(--ease-press);
+  width: 38px; height: 20px; border-radius: 5px;
+  background: var(--fill-4); border: 1px solid var(--separator-strong);
+  transition: background-color var(--dur-press) var(--ease-press), border-color var(--dur-press) var(--ease-press);
 }
 .toggle__thumb {
-  top: 2px; left: 2px; width: 20px; height: 16px; border-radius: 3px;
-  background: linear-gradient(180deg, #454a53, #2a2d33);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 1px 3px rgba(0, 0, 0, 0.55);
-  transition: transform var(--dur-press) var(--ease-press), background var(--dur-press) var(--ease-press), box-shadow var(--dur-press) var(--ease-press);
+  top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 3px; background: var(--label-3);
+  transition: transform var(--dur-press) var(--ease-press), background-color var(--dur-press) var(--ease-press);
 }
-.toggle__thumb::after {
-  content: ''; position: absolute; top: 4px; bottom: 4px; left: 50%; width: 7px; transform: translateX(-50%);
-  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.4) 0 1px, transparent 1px 3px);
-}
-.toggle input:checked + .toggle__track { border-color: rgba(48, 209, 88, 0.5); box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.55), 0 0 10px rgba(48, 209, 88, 0.18); }
-.toggle input:checked + .toggle__track::before { opacity: 0.55; transform: none; }
-.toggle input:checked + .toggle__track .toggle__thumb {
-  transform: translateX(22px);
-  background: linear-gradient(180deg, #5ee884, var(--tint));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 0 10px rgba(48, 209, 88, 0.6);
-}
-.toggle input:checked + .toggle__track .toggle__thumb::after { background: repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.35) 0 1px, transparent 1px 3px); }
+.toggle input:checked + .toggle__track { background: var(--tint-quiet); border-color: color-mix(in srgb, var(--tint) 55%, transparent); }
+.toggle input:checked + .toggle__track .toggle__thumb { transform: translateX(18px); background: var(--tint); box-shadow: none; }
 .toggle input:focus-visible + .toggle__track { outline: 2px solid var(--tint); outline-offset: 3px; }
 
 .controls__buttons { gap: var(--sp-2); margin-top: var(--sp-1); }
@@ -639,7 +618,7 @@ body { background: #000; font: var(--t-body) var(--font); color: var(--label); }
   .sidebar, .building-panel, .demo-strip, .modal, .movement-legend, .search__results { animation: none; }
   .demo-strip__fill { animation: none; transform: scaleX(1); }
   .btn, .icon-btn, .chip, .tabs__tab, .toplist__item, .legend__row--btn, .search__item,
-  .model-link, .drawer-btn, .toggle__thumb, .toggle__track, .toggle__track::before { transition: none; }
+  .model-link, .drawer-btn, .toggle__thumb, .toggle__track { transition: none; }
   .brand__beacon { animation: none; }
   .btn:active, .icon-btn:active, .chip:active, .toplist__item:active,
   .legend__row--btn:active, .search__item:active, .tabs__tab:active, .drawer-btn:active { transform: none; }

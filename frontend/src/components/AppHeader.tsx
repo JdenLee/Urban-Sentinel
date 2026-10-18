@@ -17,19 +17,12 @@ export function AppHeader({ sidebarOpen, isMock, onToggleSidebar, onOpenModel }:
         </svg>
       </button>
       <div className="brand">
-        {/* A stepped setback tower under a beacon: the sentinel watching the skyline. */}
+        {/* A setback skyscraper with lit windows and a beacon on its spire. */}
         <svg className="brand__mark" viewBox="0 0 34 34" fill="none" aria-hidden="true">
-          <defs>
-            <linearGradient id="brand-tower" x1="0" y1="1" x2="0" y2="0">
-              <stop offset="0" stopColor="currentColor" stopOpacity="0.35" />
-              <stop offset="1" stopColor="currentColor" />
-            </linearGradient>
-          </defs>
-          <path d="M10 33V22h2v-9h2V7h2V4.5h2V7h2v6h2v9h2v11z" fill="url(#brand-tower)" />
-          <path d="M17 9.5v21.5M13.5 16v15M20.5 16v15" stroke="var(--mat-opaque)" strokeWidth="0.9" />
-          <path d="M17 4.5V2.6" stroke="currentColor" strokeWidth="1.2" />
-          <circle className="brand__beacon" cx="17" cy="1.8" r="1.5" fill="currentColor" />
-          <path d="M5 33h24" stroke="currentColor" strokeOpacity="0.5" strokeWidth="1.2" strokeLinecap="round" />
+          <path d="M8 33V24H10V15H12V8H14.5V5H19.5V8H22V15H24V24H26V33Z" fill="currentColor" />
+          <path d="M10.2 25.6h1.6v1.6h-1.6zM13.2 25.6h1.6v1.6h-1.6zM16.2 25.6h1.6v1.6h-1.6zM19.2 25.6h1.6v1.6h-1.6zM22.2 25.6h1.6v1.6h-1.6zM10.2 28.4h1.6v1.6h-1.6zM13.2 28.4h1.6v1.6h-1.6zM16.2 28.4h1.6v1.6h-1.6zM19.2 28.4h1.6v1.6h-1.6zM22.2 28.4h1.6v1.6h-1.6zM11.7 16.6h1.6v1.6h-1.6zM14.7 16.6h1.6v1.6h-1.6zM17.7 16.6h1.6v1.6h-1.6zM20.7 16.6h1.6v1.6h-1.6zM11.7 19.4h1.6v1.6h-1.6zM14.7 19.4h1.6v1.6h-1.6zM17.7 19.4h1.6v1.6h-1.6zM20.7 19.4h1.6v1.6h-1.6zM14.7 9.6h1.6v1.6h-1.6zM17.7 9.6h1.6v1.6h-1.6zM14.7 12.4h1.6v1.6h-1.6zM17.7 12.4h1.6v1.6h-1.6zM15.5 33v-3.4h3V33z" fill="var(--mat-opaque)" />
+          <path d="M17 5V2.4" stroke="currentColor" strokeWidth="1.2" />
+          <circle className="brand__beacon" cx="17" cy="1.8" r="1.4" fill="currentColor" />
         </svg>
         <div>
           <h1 className="title">Urban Sentinel</h1>
