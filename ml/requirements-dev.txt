@@ -1,0 +1,1 @@
+matplotlib==3.11.2  # figures only (dev); not needed on LinuxONE
