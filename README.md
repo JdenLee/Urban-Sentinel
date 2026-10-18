@@ -46,7 +46,7 @@ In December 2019, architect Erica Tishman was killed by façade debris falling f
 | **Inspection shortlist** | Top-N list for a chosen capacity, exportable to CSV |
 | **Recalculate on IBM Z** | Re-scores a building live on LinuxONE and shows the engine (NNPA or CPU), probability and latency |
 | **Why this building?** | Top factors behind each score (TreeSHAP explanations) in plain language |
-| **Satellite ground motion** | Measured NASA OPERA InSAR ground movement as context. Shown as its own layer, not used by the model (see Results) |
+| **Satellite ground motion** | Satellite-measured ground movement, shown as a separate context layer |
 | **Search and history** | Look up any NYC address or BIN and see its inspection and violation record (history comes from the live API) |
 
 ![Building detail: rank, calibrated probability, warning signals and the Recalculate on IBM Z action](docs/screenshots/building-panel.jpg)
@@ -79,7 +79,7 @@ In December 2019, architect Erica Tishman was killed by façade debris falling f
 | [DOB ECB Violations](https://data.cityofnewyork.us/d/6bgk-3dad) | Failure to maintain walls, façade report not filed, sidewalk sheds |
 | [NYC PLUTO](https://data.cityofnewyork.us/d/64uk-42ks) | Building age, floors, lot size, building class, location |
 | [NYC Building Footprints](https://data.cityofnewyork.us/d/5zhs-2jue) | 3D building shapes on the map |
-| NASA OPERA DISP-S1 (Sentinel-1 InSAR, via [ASF DAAC](https://search.asf.alaska.edu), read with [opera-utils](https://github.com/opera-adt/opera-utils)) | Ground-motion layer: 97 satellite passes, 2016-09 to 2020-02, quality-filtered |
+| Satellite ground-motion data (InSAR) | Context layer on the map |
 | [NYC DOB façade risk scores](https://github.com/NYCDOB/FacadeRisk) (2022) | **Benchmark only.** We compare against it; it is not used by our model |
 | DOB Complaints | Tested; **no gain**, so not used |
 
@@ -120,9 +120,9 @@ That is +0.096 PR-AUC over the rule (95% CI +0.083 to +0.108) and +10.2 points o
 - **Leakage caught and removed.** Three penalty fields in the filings data have no date and are updated after the fact. Including them would have inflated PR-AUC from 0.379 to 0.552, so we excluded them ([audit](ml/reports/leakage_audit.json)).
 - **Same buildings, same information for every comparison.** On 12,116 identical buildings, our model beats DOB's 2022 score (PR-AUC 0.461 vs 0.341), even though DOB's model may already have seen these outcomes.
 - **Uncertainty reported.** Every comparison carries a paired-bootstrap 95% confidence interval.
-- **Satellite data tested, not assumed.** Adding InSAR ground motion gave **no measurable gain**: +0.001 PR-AUC, CI −0.004 to +0.006, in clean block-grouped cross-validation. City ground motion is about 1–2 mm/yr, measured on 30 m pixels, which is block scale rather than building scale. We show it as context and make no structural-safety claim ([InSAR ablation](ml/reports/INSAR_ABLATION.md)).
+- **Satellite data tested.** Satellite ground-motion data did not improve predictions, so it is shown on the map as context only.
 
-![Measured NASA OPERA ground motion shown as its own map layer, with observation period and source](docs/screenshots/satellite-layer.jpg)
+![Satellite ground-motion context layer on the map](docs/screenshots/satellite-layer.jpg)
 
 Full tables: [`ml/reports/RESULTS.md`](ml/reports/RESULTS.md) · Source ablation: [`ml/reports/ABLATION.md`](ml/reports/ABLATION.md)
 
@@ -173,7 +173,6 @@ python -m urban_sentinel.pipeline             # download → evaluate → train 
 - **We predict an inspector's recorded rating, not structural collapse.** Buildings that never file have no outcome, so they are under-represented in training.
 - **The map shows Lower Manhattan.** The model scores the whole city (13,650 buildings), but the 3D demo area is limited.
 - **PLUTO building attributes are a 2026 snapshot.** Most are near-static. Without them the model still beats the rule (PR-AUC 0.424).
-- **Satellite ground motion did not improve predictions** at this resolution.
 
 **Next steps**
 - **Citywide map and automatic rescoring** as new filings and violations arrive. The `POST /rescore` endpoint already exists.
@@ -186,7 +185,7 @@ python -m urban_sentinel.pipeline             # download → evaluate → train 
 | Path | What's inside |
 |---|---|
 | [`ml/`](ml/README.md) | Data pipeline, model, evaluation, FastAPI service, LinuxONE runbook, figures and evidence |
-| [`ml/insar/`](ml/insar/README.md) | NASA OPERA InSAR processing and quality report |
+| [`ml/insar/`](ml/insar/README.md) | Satellite ground-motion processing |
 | [`frontend/`](frontend/README.md) | 3D map (React, MapLibre, deck.gl) |
 
 ## Built with
