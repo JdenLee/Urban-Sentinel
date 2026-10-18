@@ -17,10 +17,19 @@ export function AppHeader({ sidebarOpen, isMock, onToggleSidebar, onOpenModel }:
         </svg>
       </button>
       <div className="brand">
+        {/* A stepped setback tower under a beacon: the sentinel watching the skyline. */}
         <svg className="brand__mark" viewBox="0 0 34 34" fill="none" aria-hidden="true">
-          <path d="M2 2h12v12H2zM20 2h12v12H20zM2 20h12v12H2z" stroke="currentColor" strokeWidth="1.5" />
-          <path d="M20 20h12v12H20z" fill="currentColor" />
-          <path d="M25 25h2v2h-2z" fill="var(--chassis)" />
+          <defs>
+            <linearGradient id="brand-tower" x1="0" y1="1" x2="0" y2="0">
+              <stop offset="0" stopColor="currentColor" stopOpacity="0.35" />
+              <stop offset="1" stopColor="currentColor" />
+            </linearGradient>
+          </defs>
+          <path d="M10 33V22h2v-9h2V7h2V4.5h2V7h2v6h2v9h2v11z" fill="url(#brand-tower)" />
+          <path d="M17 9.5v21.5M13.5 16v15M20.5 16v15" stroke="var(--mat-opaque)" strokeWidth="0.9" />
+          <path d="M17 4.5V2.6" stroke="currentColor" strokeWidth="1.2" />
+          <circle className="brand__beacon" cx="17" cy="1.8" r="1.5" fill="currentColor" />
+          <path d="M5 33h24" stroke="currentColor" strokeOpacity="0.5" strokeWidth="1.2" strokeLinecap="round" />
         </svg>
         <div>
           <h1 className="title">Urban Sentinel</h1>
