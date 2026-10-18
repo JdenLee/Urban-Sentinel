@@ -50,6 +50,8 @@
 .toggle input:checked + .toggle__track { background: #496856; border-color: #496856; }
 .toggle input:checked + .toggle__track .toggle__thumb { background: #f4f3ed; transform: translateX(12px); box-shadow: none; }
 .controls__buttons { gap: 8px; margin-top: 2px; }
+.demo-static { align-self: flex-start; font-size: 10px; text-align: left; }
+.demo-static:disabled { opacity: 0.5; cursor: default; }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 2px; background: transparent; border-color: #bac3b6; font-size: 12px; font-weight: 500; transition: background 160ms ease, border-color 160ms ease; }
 .btn:hover:not(:disabled) { background: #e3e8de; border-color: #8e9e8a; }
 .btn--primary { background: #3f5a49; border-color: #3f5a49; color: #fffdf5; }

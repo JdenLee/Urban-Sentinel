@@ -11,7 +11,7 @@ export function demoPadding(width: number, height: number) {
   return { top: 76, bottom: 64, left: width > 1100 ? 332 : 24, right: width > 1100 ? 412 : 372 };
 }
 
-const duration = (ms: number) => prefersReducedMotion() ? 0 : ms;
+export type DemoMotion = 'cinematic' | 'reduced';
 
 export interface DemoTarget {
   bin: string;
@@ -36,14 +36,17 @@ export interface DemoStep {
   run: (a: DemoActions) => void;
 }
 
-const START: CameraStop = { center: [-74.006, 40.704], zoom: 13.0, pitch: 40, bearing: -18 };
-const APPROACH: CameraStop = { center: [-74.004, 40.712], zoom: 14.45, pitch: 56, bearing: 8 };
-const FINALE: CameraStop = { center: [-74.0005, 40.7165], zoom: 14.25, pitch: 56, bearing: 22 };
+// Original PR #3 camera route: wide approach, sweeping orbit, close-up, then pull back.
+const START: CameraStop = { center: [-73.99, 40.7], zoom: 12.3, pitch: 25, bearing: -12 };
+const APPROACH: CameraStop = { center: [-74.004, 40.712], zoom: 14.5, pitch: 58, bearing: 24 };
+const FINALE: CameraStop = { center: [-74.0005, 40.7165], zoom: 14.25, pitch: 62, bearing: 8 };
 
 const smooth = (t: number) => t * t * (3 - 2 * t);
 
 /** The fixed 30-second script. Every call returns the same steps with the same timings. */
-export function demoTimeline(): DemoStep[] {
+export function demoTimeline(motion: DemoMotion = prefersReducedMotion() ? 'reduced' : 'cinematic'): DemoStep[] {
+  const animate = motion === 'cinematic';
+  const duration = (ms: number) => animate ? ms : 0;
   return [
     {
       at: 0,
@@ -54,7 +57,7 @@ export function demoTimeline(): DemoStep[] {
         setSelectedBin(null);
         setPanelOpen(false);
         map.jumpTo({ ...START, padding: NO_PADDING });
-        map.flyTo({ ...APPROACH, duration: duration(5000), curve: 1.15, essential: false });
+        map.flyTo({ ...APPROACH, duration: duration(5000), curve: 1.25, essential: animate });
       },
     },
     {
@@ -62,7 +65,7 @@ export function demoTimeline(): DemoStep[] {
       stage: 'Inspection-priority scores',
       run: ({ map, setShowRisk }) => {
         setShowRisk(true);
-        map.easeTo({ bearing: APPROACH.bearing + 12, zoom: APPROACH.zoom + 0.25, duration: duration(4800), easing: smooth, essential: false });
+        map.easeTo({ bearing: APPROACH.bearing + 22, zoom: APPROACH.zoom + 0.35, duration: duration(5000), easing: smooth, essential: animate });
       },
     },
     {
@@ -70,8 +73,8 @@ export function demoTimeline(): DemoStep[] {
       stage: 'Highest-priority building',
       run: ({ map, target, setSelectedBin, later }) => {
         if (!target) return;
-        const zoom = target.height_m > 120 ? 15.8 : 16.25;
-        map.flyTo({ center: target.center, zoom, pitch: 60, bearing: 36, duration: duration(5500), curve: 1.15, essential: false });
+        const zoom = target.height_m > 300 ? 15.05 : target.height_m > 120 ? 16.1 : 16.7;
+        map.flyTo({ center: target.center, zoom, pitch: 63, bearing: 78, duration: duration(5500), curve: 1.4, essential: animate });
         later(() => setSelectedBin(target.bin), 4200);
       },
     },
@@ -83,11 +86,11 @@ export function demoTimeline(): DemoStep[] {
         if (!target) return;
         map.easeTo({
           center: target.center,
-          bearing: 48,
+          bearing: 104,
           padding: demoPadding(map.getContainer().clientWidth, map.getContainer().clientHeight),
-          duration: duration(6000),
+          duration: duration(7000),
           easing: smooth,
-          essential: false,
+          essential: animate,
         });
       },
     },
@@ -95,7 +98,7 @@ export function demoTimeline(): DemoStep[] {
       at: 24_000,
       stage: 'From evidence to inspection priorities',
       run: ({ map }) => {
-        map.flyTo({ ...FINALE, padding: demoPadding(map.getContainer().clientWidth, map.getContainer().clientHeight), duration: duration(5800), curve: 1.15, essential: false });
+        map.flyTo({ ...FINALE, padding: demoPadding(map.getContainer().clientWidth, map.getContainer().clientHeight), duration: duration(5800), curve: 1.2, essential: animate });
       },
     },
   ];
@@ -123,7 +126,9 @@ export function useDemoRunner(getActions: () => Omit<DemoActions, 'later'> | nul
     setRunning(false);
   }, [getActions]);
 
-  const start = useCallback(() => {
+  // Starting the cinematic tour is an explicit request for camera motion. Other navigation still
+  // respects the OS preference, and the adjacent reduced-motion action uses instant camera cuts.
+  const start = useCallback((motion: DemoMotion = 'cinematic') => {
     const actions = getActions();
     if (!actions) return;
     clear();
@@ -135,7 +140,7 @@ export function useDemoRunner(getActions: () => Omit<DemoActions, 'later'> | nul
       timers.current.push(window.setTimeout(() => runningRef.current && fn(), ms));
     };
     const ctx: DemoActions = { ...actions, later: schedule };
-    for (const step of demoTimeline()) {
+    for (const step of demoTimeline(motion)) {
       schedule(() => {
         setStage(step.stage);
         step.run(ctx);

@@ -8,7 +8,7 @@ import { RiskLegend } from './components/RiskLegend';
 import { SearchBox, Shortlist } from './components/Shortlist';
 import { MovementLegend } from './components/MovementLegend';
 import { ModelCardDialog } from './components/ModelCard';
-import { DemoController, useDemoRunner, type DemoTarget } from './components/DemoController';
+import { DemoController, useDemoRunner, type DemoMotion, type DemoTarget } from './components/DemoController';
 import { loadBuildings } from './data/loadBuildings';
 import { loadPredictionsWithFallback } from './data/loadPredictions';
 import { loadGroundMotion, type GroundMotionLayer } from './data/loadGroundMotion';
@@ -115,12 +115,12 @@ export default function App() {
   }, [demoTarget]);
   const demo = useDemoRunner(getActions);
 
-  const startDemo = useCallback(() => {
+  const startDemo = useCallback((motion: DemoMotion) => {
     // The demo tells the full story, so clear any filters first.
     setVisiblePriorities(new Set(PRIORITIES));
     setShortlistOnly(false);
     setModelCardOpen(false);
-    demo.start();
+    demo.start(motion);
   }, [demo]);
 
   useEffect(() => {
