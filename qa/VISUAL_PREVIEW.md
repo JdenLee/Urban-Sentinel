@@ -7,9 +7,10 @@ This is an isolated visual polish proposal for the three-minute Urban Sentinel d
 - Checkout: `/Users/aaron/Desktop/VScode/IBM Datathon/megatron-codex-visuals`
 - Branch: `codex/visual-polish`
 - Base: PR #6 (`feature/building-history-frontend`), commit `0f924a9f241b0bffd296fa5ca86ecc60977ba8ab`.
+- Integration baseline: synchronized with `main` at `245106f`, preserving its shared date formatter and tests.
 - Local preview: `http://127.0.0.1:4180/`
 
-No team checkout, API implementation, ML pipeline, score contract, or deployment was changed. This branch is local and has not been merged or deployed.
+No team checkout, API implementation, ML pipeline, score contract, or deployment was changed. This document records local preview validation; the associated PR records integration status.
 
 ## Exact file scope
 
@@ -52,7 +53,7 @@ VITE_API_URL=/qa-offline VITE_PREDICTIONS_URL=/data/qa-preview.json npm run dev 
 
 ## Validation
 
-- Frontend suite: 46 tests passed, including basemap and landmark regression checks.
+- Frontend suite after integrating current main: 47 tests passed, including basemap, landmark, and date-format regression checks.
 - TypeScript and Vite production build passed.
 - Browser preview at 1280 × 720: completed the 30-second sequence, reopened the selected building, restarted the demo, stopped with Escape, and used Reset View.
 - No browser error/warning logs observed during these checks.
@@ -63,9 +64,9 @@ VITE_API_URL=/qa-offline VITE_PREDICTIONS_URL=/data/qa-preview.json npm run dev 
 
 ## Integration considerations
 
-This proposal overlaps frontend presentation files in PR #6, so integrate it only after the frontend owner reviews the diff against their latest head. It deliberately keeps API/data changes out of the patch.
+The presentation changes were integrated with the current main branch after PR #6 and its dependent frontend work merged. The only merge conflict was between imports in ModelCard; both the prediction-source type and main's shared date formatter were retained. The PR diff contains frontend presentation, relevant regression tests, and this validation record.
 
-Release QA findings remain separate: priority thresholds versus percentile categories, shortlist/map capacity alignment, request timeouts, and verification against the final LinuxONE export. The training-label display now preserves `FISP cycle 9` literally instead of parsing it as a date; this correction remains local until integrated. A visual preview is not evidence the other release gates have passed.
+Release QA findings remain separate: priority thresholds versus percentile categories, shortlist/map capacity alignment, request timeouts, and verification against the final LinuxONE export. The training-label display preserves `FISP cycle 9` literally using main's shared date formatter. A visual preview is not evidence the other release gates have passed.
 
 Coverage remains the existing Lower Manhattan demo bounding box. Broader map coverage requires more prepared footprints and matching prediction exports; no geographic expansion is included. Removing duplicate basemap extrusions also leaves areas outside the prepared scene as a flat basemap unless an individual searched footprint is loaded.
 
