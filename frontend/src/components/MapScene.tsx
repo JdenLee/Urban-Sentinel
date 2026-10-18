@@ -7,16 +7,11 @@ import type { DataMode, JoinedFeature, JoinResult, Priority } from '../types/pre
 import { buildingRiskLayers } from '../layers/buildingRiskLayer';
 import { movementHexagonLayer, movementPoints, type MovementPointDatum } from '../layers/movementHexagonLayer';
 import { PRIORITY_LABEL } from '../data/priority';
-import { DEMO_BBOX, INITIAL_VIEW } from '../camera';
+import { INITIAL_VIEW } from '../camera';
+import { adaptBasemapStyle } from '../data/basemapStyle';
 import { CinematicOverlay } from './CinematicOverlay';
 
 export const BASEMAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
-
-const [W, S, E, N] = DEMO_BBOX;
-const DEMO_AREA_POLYGON = {
-  type: 'Polygon' as const,
-  coordinates: [[[W, S], [E, S], [E, N], [W, N], [W, S]]],
-};
 
 /** Dark background-only style used if the basemap cannot be fetched; the scored overlay still renders. */
 const FALLBACK_STYLE: StyleSpecification = {
@@ -24,37 +19,6 @@ const FALLBACK_STYLE: StyleSpecification = {
   sources: {},
   layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#070a12' } }],
 };
-
-/**
- * Adapt the OpenFreeMap dark style: drop sprite-pattern fills it does not ship, hide its flat
- * building fills and add generic 3D context buildings outside the scored demo area.
- */
-export function adaptBasemapStyle(style: StyleSpecification): StyleSpecification {
-  const vectorSource = Object.entries(style.sources).find(([, s]) => s.type === 'vector')?.[0];
-  const layers = style.layers
-    .filter((l) => !(l.type === 'fill' && l.paint && 'fill-pattern' in l.paint))
-    .map((l) =>
-      'source-layer' in l && l['source-layer'] === 'building' ? { ...l, layout: { ...l.layout, visibility: 'none' as const } } : l,
-    );
-  if (vectorSource) {
-    const firstSymbol = layers.findIndex((l) => l.type === 'symbol');
-    layers.splice(firstSymbol < 0 ? layers.length : firstSymbol, 0, {
-      id: 'context-3d-buildings',
-      source: vectorSource,
-      'source-layer': 'building',
-      type: 'fill-extrusion',
-      minzoom: 12,
-      filter: ['!', ['within', DEMO_AREA_POLYGON]],
-      paint: {
-        'fill-extrusion-color': '#1a2030',
-        'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 10],
-        'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
-        'fill-extrusion-opacity': 0.9,
-      },
-    });
-  }
-  return { ...style, layers };
-}
 
 function useBasemapStyle(onError: (message: string) => void) {
   const [style, setStyle] = useState<StyleSpecification | null>(null);
