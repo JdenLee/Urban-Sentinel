@@ -14,6 +14,7 @@ import { loadPredictionsWithFallback } from './data/loadPredictions';
 import { loadGroundMotion, type GroundMotionLayer } from './data/loadGroundMotion';
 import type { PredictionSource } from './config';
 import { DEFAULT_HEIGHT_M, featureCentroid, joinByBin } from './data/joinByBin';
+import { DEFAULT_MATERIAL } from './data/facadeMaterials';
 import { fetchFootprint, fetchHistory } from './data/loadHistory';
 import { useAssignments } from './data/shortlist';
 import { INITIAL_CAMERA, prefersReducedMotion } from './camera';
@@ -49,7 +50,14 @@ function toJoined(f: BuildingFeature): JoinedFeature {
   return {
     type: 'Feature',
     geometry: f.geometry,
-    properties: { ...f.properties, height_m: hasHeight ? h : DEFAULT_HEIGHT_M, height_estimated: !hasHeight, prediction: null },
+    properties: {
+      ...f.properties,
+      height_m: hasHeight ? h : DEFAULT_HEIGHT_M,
+      height_estimated: !hasHeight,
+      material: f.properties.material ?? DEFAULT_MATERIAL,
+      material_source: f.properties.material_source ?? 'inferred',
+      prediction: null,
+    },
   };
 }
 

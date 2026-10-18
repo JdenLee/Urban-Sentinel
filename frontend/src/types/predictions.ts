@@ -1,4 +1,5 @@
 import type { Feature, FeatureCollection, MultiPolygon, Polygon } from 'geojson';
+import type { FacadeMaterial, MaterialSource } from '../data/facadeMaterials';
 
 export type Priority = 'low' | 'medium' | 'high' | 'critical';
 export const PRIORITIES: readonly Priority[] = ['low', 'medium', 'high', 'critical'];
@@ -102,6 +103,12 @@ export interface BuildingProperties {
   address: string | null;
   height_m: number | null;
   year_built?: number | null;
+  /** Storeys from MapPLUTO; sets the floor band spacing on the façade. */
+  floors?: number | null;
+  /** Façade material class rendered by the shader (see data/facadeMaterials.ts). */
+  material?: FacadeMaterial | null;
+  /** 'filing' when an inspector recorded the wall type, 'inferred' when derived from era and use. */
+  material_source?: MaterialSource | null;
 }
 
 export type BuildingGeometry = Polygon | MultiPolygon;
@@ -112,6 +119,8 @@ export type BuildingCollection = FeatureCollection<BuildingGeometry, BuildingPro
 export interface JoinedProperties extends BuildingProperties {
   height_m: number;
   height_estimated: boolean;
+  material: FacadeMaterial;
+  material_source: MaterialSource;
   prediction: BuildingPrediction | null;
 }
 export type JoinedFeature = Feature<BuildingGeometry, JoinedProperties>;

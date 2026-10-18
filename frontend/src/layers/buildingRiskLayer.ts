@@ -1,10 +1,12 @@
 import { GeoJsonLayer, ColumnLayer } from '@deck.gl/layers';
+import type { GeoJsonLayerProps } from '@deck.gl/layers';
 import type { Layer } from '@deck.gl/core';
 import type { JoinedFeature, Priority } from '../types/predictions';
 import { FILTERED_COLOR, PRIORITY_COLOR, SELECTED_COLOR, UNSCORED_COLOR } from '../data/priority';
 import { featureCentroid } from '../data/joinByBin';
 import { landmarkFor } from '../data/landmarks';
-import { BUILDING_FACADE } from './BuildingFacadeExtension';
+import { materialIndex, storeyHeight } from '../data/facadeMaterials';
+import { FACADE_MATERIAL } from './FacadeMaterialExtension';
 import { landmarkLayers } from './landmarkLayer';
 
 type RGBA = [number, number, number, number];
@@ -15,6 +17,19 @@ const COLOR_TRANSITION_MS = 1600;
 
 const MATERIAL = { ambient: 0.45, diffuse: 0.6, shininess: 24, specularColor: [70, 80, 110] as [number, number, number] };
 const ordinaryCache = new WeakMap<JoinedFeature[], JoinedFeature[]>();
+
+/**
+ * Procedural façade material, shared by every extruded body. deck.gl's layer prop types do not
+ * include extension props, so the accessor is cast in once here rather than at each use.
+ */
+const FACADE: Partial<GeoJsonLayerProps<JoinedFeature['properties']>> = {
+  extensions: [FACADE_MATERIAL],
+  // Per building: material class, storey spacing in metres, roof height in metres.
+  getFacadeParams: (f: JoinedFeature) => {
+    const { height_m, floors, material } = f.properties;
+    return [materialIndex(material), storeyHeight(height_m, floors, material), height_m];
+  },
+} as Partial<GeoJsonLayerProps<JoinedFeature['properties']>>;
 
 function ordinaryBuildings(features: JoinedFeature[]): JoinedFeature[] {
   let ordinary = ordinaryCache.get(features);
@@ -68,7 +83,7 @@ export function buildingRiskLayers(options: BuildingLayerOptions): Layer[] {
     new GeoJsonLayer<JoinedFeature['properties']>({
       id: 'context-buildings',
       data: ordinaryBuildings(context),
-      extensions: [BUILDING_FACADE],
+      ...FACADE,
       extruded: true,
       filled: true,
       stroked: false,
@@ -83,7 +98,7 @@ export function buildingRiskLayers(options: BuildingLayerOptions): Layer[] {
     new GeoJsonLayer<JoinedFeature['properties']>({
       id: 'scored-buildings',
       data: ordinaryBuildings(scored),
-      extensions: [BUILDING_FACADE],
+      ...FACADE,
       extruded: true,
       filled: true,
       stroked: false,
@@ -103,7 +118,7 @@ export function buildingRiskLayers(options: BuildingLayerOptions): Layer[] {
       new GeoJsonLayer<JoinedFeature['properties']>({
         id: 'external-highlight',
         data: [highlight.feature],
-        extensions: [BUILDING_FACADE],
+        ...FACADE,
         extruded: true,
         filled: true,
         stroked: false,

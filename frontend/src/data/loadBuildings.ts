@@ -1,4 +1,5 @@
 import type { BuildingCollection, BuildingFeature } from '../types/predictions';
+import { isFacadeMaterial } from './facadeMaterials';
 import { binString } from './loadPredictions';
 
 export const BUILDINGS_URL = `${import.meta.env.BASE_URL}data/buildings-demo.geojson`;
@@ -16,6 +17,8 @@ export function parseBuildings(raw: unknown): BuildingCollection {
     const bin = binString(f.properties?.bin);
     if (!bin) continue;
     const h = Number(f.properties.height_m);
+    const floors = Number(f.properties.floors);
+    const material = f.properties.material;
     features.push({
       type: 'Feature',
       geometry: f.geometry,
@@ -24,6 +27,9 @@ export function parseBuildings(raw: unknown): BuildingCollection {
         address: typeof f.properties.address === 'string' ? f.properties.address : null,
         height_m: Number.isFinite(h) && h > 0 ? h : null,
         year_built: f.properties.year_built ?? null,
+        floors: Number.isFinite(floors) && floors > 0 ? floors : null,
+        material: isFacadeMaterial(material) ? material : null,
+        material_source: f.properties.material_source === 'filing' ? 'filing' : 'inferred',
       },
     });
   }
