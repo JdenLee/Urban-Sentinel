@@ -6,7 +6,7 @@ import type { StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { DataMode, JoinedFeature, JoinResult, Priority } from '../types/predictions';
 import { buildingRiskLayers } from '../layers/buildingRiskLayer';
-import { movementHexagonLayer, movementPoints } from '../layers/movementHexagonLayer';
+import { movementHexagonLayer, movementPoints, type MovementPointDatum } from '../layers/movementHexagonLayer';
 import { PRIORITY_LABEL } from '../data/priority';
 import { DEMO_BBOX, INITIAL_VIEW } from '../camera';
 
@@ -91,6 +91,11 @@ export interface MapSceneProps {
   visiblePriorities: Set<Priority>;
   capacityCutoff: number | null;
   hexRadius: number;
+  /** Real measured movement points (e.g. NASA OPERA DISP-S1); replaces per-building factors when present. */
+  externalMovement?: MovementPointDatum[] | null;
+  /** Selected building that is not scored (context footprint or a looked-up building outside the demo area). */
+  highlight: { feature: JoinedFeature; external: boolean } | null;
+  /** Any footprint (scored or not) was clicked; null for empty map. */
   onSelect: (bin: string | null) => void;
   onUserInteract: () => void;
   onBasemapError: (message: string) => void;
@@ -106,6 +111,8 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
     visiblePriorities,
     capacityCutoff,
     hexRadius,
+    externalMovement,
+    highlight,
     onSelect,
     onUserInteract,
     onBasemapError,
@@ -114,7 +121,10 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
 ) {
   const mapStyle = useBasemapStyle(onBasemapError);
   const context = useMemo(() => join.features.filter((f) => !f.properties.prediction), [join]);
-  const points = useMemo(() => movementPoints(join.features, dataMode), [join, dataMode]);
+  const points = useMemo(
+    () => externalMovement ?? movementPoints(join.features, dataMode),
+    [externalMovement, join, dataMode],
+  );
 
   // Gentle pulse for the selection beacon; stops when nothing is selected.
   const [pulse, setPulse] = useState(0);
@@ -141,25 +151,27 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
         visiblePriorities,
         capacityCutoff,
         pulse,
+        highlight,
       }),
     ],
-    [points, showMovement, hexRadius, context, join.scored, showRisk, selectedBin, visiblePriorities, capacityCutoff, pulse],
+    [points, showMovement, hexRadius, context, join.scored, showRisk, selectedBin, visiblePriorities, capacityCutoff, pulse, highlight],
   );
 
   const onClick = useCallback(
     (info: PickingInfo) => {
       const f = info.object as JoinedFeature | undefined;
-      onSelect(f?.properties.prediction ? f.properties.bin : null);
+      onSelect(f ? f.properties.bin : null);
     },
     [onSelect],
   );
 
   const getTooltip = useCallback((info: PickingInfo) => {
     const f = info.object as JoinedFeature | undefined;
-    const p = f?.properties.prediction;
-    if (!f || !p) return null;
+    if (!f) return null;
+    const p = f.properties.prediction;
+    const head = p ? `#${p.rank} · ${PRIORITY_LABEL[p.priority]}` : 'Not scored · click for history';
     return {
-      html: `<div class="tt-rank">#${p.rank} · ${PRIORITY_LABEL[p.priority]}</div><div class="tt-addr">${escapeHtml(
+      html: `<div class="tt-rank">${head}</div><div class="tt-addr">${escapeHtml(
         f.properties.address ?? `BIN ${f.properties.bin}`,
       )}</div>`,
       className: 'deck-tooltip',

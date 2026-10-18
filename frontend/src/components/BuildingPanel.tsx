@@ -1,7 +1,19 @@
-import { useState } from 'react';
-import type { BuildingPrediction, Contribution, JoinedFeature, ModelCard, MovementPoint } from '../types/predictions';
-import { PRIORITY_COLOR, PRIORITY_LABEL, rgbCss } from '../data/priority';
+import { useMemo, useState } from 'react';
+import type {
+  BuildingHistory,
+  BuildingPrediction,
+  Contribution,
+  HistoryState,
+  JoinedFeature,
+  ModelCard,
+  MovementPoint,
+  RecordEvent,
+  SourceRef,
+} from '../types/predictions';
+import { PRIORITY_COLOR, PRIORITY_LABEL, SELECTED_COLOR, rgbCss } from '../data/priority';
 import { ASSIGNMENT_LABEL, ASSIGNMENT_STATUSES, type AssignmentStatus } from '../data/shortlist';
+import { RECORD_TYPES } from '../data/loadHistory';
+import { LiveRescore } from './LiveRescore';
 
 const FACTOR_LABELS: Record<string, { label: string; unit?: string }> = {
   sar_velocity_mm_year: { label: 'LOS velocity', unit: 'mm/yr' },
@@ -23,15 +35,28 @@ function formatFactor(key: string, value: number | string | null) {
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 
-type Tab = 'overview' | 'evidence' | 'records';
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'evidence', label: 'Evidence' },
-  { id: 'records', label: 'Records & data' },
-];
+export type Tab = 'overview' | 'evidence' | 'history';
+const TAB_LABEL: Record<Tab, string> = { overview: 'Overview', evidence: 'Evidence', history: 'History' };
+
+/** Scored buildings get the model tabs; every building gets its recorded history. */
+export function panelTabs(scored: boolean): Tab[] {
+  return scored ? ['overview', 'evidence', 'history'] : ['history'];
+}
+
+/** How many timeline entries to show before "Show all". */
+const TIMELINE_PREVIEW = 40;
 
 export interface BuildingPanelProps {
-  feature: JoinedFeature;
+  bin: string;
+  /** Footprint in the scene (scored or context), if any. */
+  feature: JoinedFeature | null;
+  /** From the scene's predictions or, for buildings outside it, from the history record. */
+  prediction: BuildingPrediction | null;
+  history: HistoryState;
+  /** Search label to show while the history loads, for buildings without a footprint in the scene. */
+  fallbackTitle: string | null;
+  /** Where the rank comes from: the scene's export ("in this area") or the API's citywide record. */
+  rankScope: 'area' | 'citywide';
   total: number;
   capacity: number;
   modelCard: ModelCard;
@@ -41,26 +66,48 @@ export interface BuildingPanelProps {
   onClose: () => void;
 }
 
+function eyebrowFor(p: BuildingPrediction | null, history: HistoryState, total: number, scope: 'area' | 'citywide'): string {
+  if (p) return `Rank #${p.rank.toLocaleString()} of ${(p.rank_total ?? total).toLocaleString()} ${scope === 'citywide' ? 'citywide' : 'in this area'}`;
+  if (history.status === 'loading') return 'Loading records…';
+  if (history.status !== 'ready') return 'Building';
+  if (!history.data.inFisp) return 'Not in the façade inspection program';
+  return history.data.fisp?.currentCycleFiled ? 'FISP building · filed this cycle' : 'FISP building · not scored';
+}
+
 export function BuildingPanel(props: BuildingPanelProps) {
-  const { feature, total, capacity, status, onStatusChange, onClose } = props;
-  const p = feature.properties.prediction as BuildingPrediction;
-  const color = rgbCss(PRIORITY_COLOR[p.priority]);
-  const [tab, setTab] = useState<Tab>('overview');
+  const { bin, feature, prediction: p, history, fallbackTitle, rankScope, total, capacity, status, onStatusChange, onClose } = props;
+  const color = rgbCss(p ? PRIORITY_COLOR[p.priority] : SELECTED_COLOR);
+  const tabs = panelTabs(p !== null);
+  const [tab, setTab] = useState<Tab>(tabs[0]);
+  const active = tabs.includes(tab) ? tab : tabs[0];
+  const data = history.status === 'ready' ? history.data : null;
+  const address = feature?.properties.address ?? data?.address ?? p?.address ?? fallbackTitle ?? 'Address unavailable';
+  const onRecord = data?.fisp?.statusOnRecord ?? null;
 
   return (
     <aside className="panel building-panel" aria-label="Selected building" style={{ ['--accent' as string]: color }}>
       <header className="building-panel__head">
         <div>
           <div className="eyebrow">
-            Rank #{p.rank} of {total}
-            {p.rank <= capacity && <span className="within-cap">Within capacity</span>}
+            {eyebrowFor(p, history, total, rankScope)}
+            {p && rankScope === 'area' && p.rank > 0 && p.rank <= capacity && <span className="within-cap">Within capacity</span>}
           </div>
-          <h2 className="building-panel__title">{feature.properties.address ?? 'Address unavailable'}</h2>
+          <h2 className="building-panel__title">{address}</h2>
           <div className="building-panel__bin">
-            BIN <span className="mono">{feature.properties.bin}</span>
-            {feature.properties.year_built ? <> · Built {feature.properties.year_built}</> : null}
-            {' · '}
-            {feature.properties.height_estimated ? 'Height unknown' : `${Math.round(feature.properties.height_m)} m`}
+            BIN <span className="mono">{bin}</span>
+            {data?.borough ? <> · {data.borough}</> : null}
+            {feature?.properties.year_built ? <> · Built {feature.properties.year_built}</> : null}
+            {feature && (
+              <>
+                {' · '}
+                {feature.properties.height_estimated ? 'Height unknown' : `${Math.round(feature.properties.height_m)} m`}
+              </>
+            )}
+            {onRecord && (
+              <span className={`record-tag record-tag--${onRecord.toLowerCase().replace(/\W+/g, '-')}`}>
+                On record: {onRecord}
+              </span>
+            )}
           </div>
         </div>
         <button type="button" className="icon-btn" onClick={onClose} aria-label="Close building panel">
@@ -68,39 +115,46 @@ export function BuildingPanel(props: BuildingPanelProps) {
         </button>
       </header>
 
-      <div className="tabs" role="tablist" aria-label="Building details">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.id}
-            className={`tabs__tab${tab === t.id ? ' is-active' : ''}`}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {tabs.length > 1 && (
+        <div className="tabs" role="tablist" aria-label="Building details">
+          {tabs.map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              aria-selected={active === t}
+              className={`tabs__tab${active === t ? ' is-active' : ''}`}
+              onClick={() => setTab(t)}
+            >
+              {TAB_LABEL[t]}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="building-panel__body" role="tabpanel">
-        {tab === 'overview' && <OverviewTab {...props} p={p} color={color} />}
-        {tab === 'evidence' && <EvidenceTab p={p} color={color} />}
-        {tab === 'records' && <RecordsTab p={p} />}
+        {active === 'overview' && p && <OverviewTab {...props} p={p} color={color} />}
+        {active === 'evidence' && p && <EvidenceTab p={p} />}
+        {active === 'history' && <HistoryTab p={p} history={history} color={color} />}
       </div>
 
       <footer className="building-panel__foot">
-        <label className="status-select">
-          <span>Inspection status</span>
-          <select value={status} onChange={(e) => onStatusChange(e.target.value as AssignmentStatus)}>
-            {ASSIGNMENT_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {ASSIGNMENT_LABEL[s]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <p className="disclaimer">Decision-support tool; field inspection required. Ranks buildings for review — not a structural simulation or a prediction of failure.</p>
+        {p && rankScope === 'area' && (
+          <label className="status-select">
+            <span>Inspection status</span>
+            <select value={status} onChange={(e) => onStatusChange(e.target.value as AssignmentStatus)}>
+              {ASSIGNMENT_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {ASSIGNMENT_LABEL[s]}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <p className="disclaimer">
+          Decision-support tool; field inspection required. Ranks buildings for review — not a structural simulation or
+          a prediction of failure.
+        </p>
       </footer>
     </aside>
   );
@@ -160,6 +214,8 @@ function OverviewTab({ p, color, modelCard, onOpenModelCard }: BuildingPanelProp
         </p>
       </section>
 
+      <LiveRescore bin={p.bin} storedProbability={p.probability} />
+
       {p.explanations.length > 0 && (
         <section>
           <h3 className="section-title">Elevated warning signals</h3>
@@ -181,7 +237,7 @@ function OverviewTab({ p, color, modelCard, onOpenModelCard }: BuildingPanelProp
   );
 }
 
-function EvidenceTab({ p, color }: { p: BuildingPrediction; color: string }) {
+function EvidenceTab({ p }: { p: BuildingPrediction }) {
   const factors = Object.entries(p.factors);
   return (
     <>
@@ -191,15 +247,8 @@ function EvidenceTab({ p, color }: { p: BuildingPrediction; color: string }) {
           <ContributionBars items={p.contributions.slice(0, 6)} />
         </section>
       )}
-
-      <section>
-        <h3 className="section-title">Line-of-sight displacement</h3>
-        {p.movement_history.length >= 2 ? (
-          <MovementChart points={p.movement_history} color={color} />
-        ) : (
-          <p className="muted small">No movement history for this building.</p>
-        )}
-        {p.angular_distortion !== null && (
+      {p.angular_distortion !== null && (
+        <section>
           <dl className="kv">
             <div className="kv__row">
               <dt>Angular distortion (β)</dt>
@@ -208,69 +257,201 @@ function EvidenceTab({ p, color }: { p: BuildingPrediction; color: string }) {
               </dd>
             </div>
           </dl>
-        )}
-      </section>
-
+        </section>
+      )}
       {factors.length > 0 && (
         <section>
           <h3 className="section-title">Model inputs</h3>
           <FactorList entries={factors} />
         </section>
       )}
+      <p className="muted small">Ground-movement history is on the History tab; it is context, not a model input.</p>
     </>
   );
 }
 
-function RecordsTab({ p }: { p: BuildingPrediction }) {
+function HistoryNotice({ history }: { history: HistoryState }) {
+  if (history.status === 'loading') {
+    return (
+      <p className="muted small">
+        <span className="spinner" aria-hidden /> Loading filings, violations, complaints and ground movement…
+      </p>
+    );
+  }
+  if (history.status === 'unavailable') {
+    return (
+      <p className="notice">
+        Full building history needs the ML API. Start it and set <code>VITE_API_URL</code> (see frontend/README.md).
+      </p>
+    );
+  }
+  if (history.status === 'error') return <p className="error-text">{history.message}</p>;
+  return null;
+}
+
+function FispSummary({ data }: { data: BuildingHistory }) {
+  if (!data.fisp) return null;
+  const f = data.fisp;
+  return (
+    <section>
+      <h3 className="section-title">Façade inspection program</h3>
+      <dl className="kv">
+        <div className="kv__row">
+          <dt>Status on record</dt>
+          <dd className="mono">{f.statusOnRecord ?? '—'}</dd>
+        </div>
+        {f.currentCycle !== null && (
+          <div className="kv__row">
+            <dt>Cycle {f.currentCycle} filed</dt>
+            <dd className="mono">{f.currentCycleFiled === null ? '—' : f.currentCycleFiled ? 'Yes' : 'Not yet'}</dd>
+          </div>
+        )}
+        {f.filingWindowCloses && (
+          <div className="kv__row">
+            <dt>Filing window closes</dt>
+            <dd className="mono">{f.filingWindowCloses}</dd>
+          </div>
+        )}
+      </dl>
+    </section>
+  );
+}
+
+function MovementSection({ data, p, color }: { data: BuildingHistory | null; p: BuildingPrediction | null; color: string }) {
+  const m = data?.movement ?? null;
+  const points = m?.points ?? (p && p.movement_history.length >= 2 ? p.movement_history : []);
+  if (points.length < 2) {
+    return data ? (
+      <section>
+        <h3 className="section-title">Ground movement (satellite, measured)</h3>
+        <p className="muted small">No satellite movement series for this building.</p>
+      </section>
+    ) : null;
+  }
+  return (
+    <section>
+      <h3 className="section-title">Ground movement (satellite, measured)</h3>
+      <MovementChart points={points} color={color} baselineLabel={m?.meta.baseline_label ?? undefined} />
+      {m && (
+        <>
+          {m.velocityHp !== null && (
+            <dl className="kv">
+              <div className="kv__row">
+                <dt>Building vs neighbourhood, LOS</dt>
+                <dd className="mono">
+                  {m.velocityHp > 0 ? '+' : ''}
+                  {m.velocityHp.toFixed(1)} mm/yr
+                </dd>
+              </div>
+            </dl>
+          )}
+          <p className="muted small chart-note">
+            Measured by {m.meta.source}
+            {m.meta.period_start && m.meta.period_end ? `, observed ${m.meta.period_start} → ${m.meta.period_end}` : ''}.{' '}
+            {m.meta.sign ? `${m.meta.sign}. ` : ''}
+            {m.meta.note}
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
+function Timeline({ records }: { records: RecordEvent[] }) {
+  const [filter, setFilter] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const counts = useMemo(() => {
+    const c = new Map<string, number>();
+    for (const r of records) c.set(r.type, (c.get(r.type) ?? 0) + 1);
+    return c;
+  }, [records]);
+  const types = [...RECORD_TYPES.filter((t) => counts.has(t)), ...[...counts.keys()].filter((t) => !(RECORD_TYPES as readonly string[]).includes(t))];
+  const shown = filter ? records.filter((r) => r.type === filter) : records;
+  const visible = showAll ? shown : shown.slice(0, TIMELINE_PREVIEW);
+  if (!records.length) return <p className="muted small">No records on file.</p>;
   return (
     <>
-      <section>
-        <h3 className="section-title">Record history</h3>
-        {p.record_history.length ? (
-          <ol className="timeline">
-            {p.record_history.map((r, i) => (
-              <li key={i} className="timeline__item">
-                <span className="timeline__date mono">{r.date ?? '—'}</span>
-                <span className="timeline__type">{r.type}</span>
-                <span className="timeline__desc">{r.description}</span>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className="muted small">No records supplied.</p>
-        )}
-      </section>
+      {types.length > 1 && (
+        <div className="chips" role="group" aria-label="Filter records by type">
+          <button type="button" className={`chip${filter === null ? ' is-active' : ''}`} onClick={() => setFilter(null)}>
+            All <span className="mono">{records.length}</span>
+          </button>
+          {types.map((t) => (
+            <button
+              key={t}
+              type="button"
+              className={`chip${filter === t ? ' is-active' : ''}`}
+              onClick={() => setFilter(filter === t ? null : t)}
+            >
+              {t} <span className="mono">{counts.get(t)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <ol className="timeline">
+        {visible.map((r, i) => (
+          <li key={i} className="timeline__item">
+            <span className="timeline__date mono">{r.date ?? '—'}</span>
+            <span className="timeline__type">{r.type}</span>
+            <span className="timeline__desc">{r.description}</span>
+          </li>
+        ))}
+      </ol>
+      {shown.length > visible.length && (
+        <button type="button" className="btn btn--block" onClick={() => setShowAll(true)}>
+          Show all {shown.length} records
+        </button>
+      )}
+    </>
+  );
+}
 
-      <section>
-        <h3 className="section-title">Data completeness</h3>
-        {p.completeness !== null ? (
+function SourcesList({ sources }: { sources: SourceRef[] }) {
+  if (!sources.length) return <p className="muted small">Not reported.</p>;
+  return (
+    <dl className="kv">
+      {sources.map((s) => (
+        <div key={s.name} className="kv__row">
+          <dt>{s.name}</dt>
+          <dd className="mono">{s.observed_at ?? '—'}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function HistoryTab({ p, history, color }: { p: BuildingPrediction | null; history: HistoryState; color: string }) {
+  const data = history.status === 'ready' ? history.data : null;
+  // Without the API, fall back to whatever the prediction file carries (the mock data has records and movement).
+  const records = data ? data.records : (p?.record_history ?? []);
+  const sources = data ? data.sources : (p?.sources ?? []);
+  return (
+    <>
+      <HistoryNotice history={history} />
+      {data && <FispSummary data={data} />}
+      <MovementSection data={data} p={p} color={color} />
+      {(data || records.length > 0) && (
+        <section>
+          <h3 className="section-title">Record history</h3>
+          <Timeline records={records} />
+        </section>
+      )}
+      {p && p.completeness !== null && (
+        <section>
+          <h3 className="section-title">Data completeness</h3>
           <div className="meter" aria-label={`Completeness ${pct(p.completeness)}`}>
             <div className="meter__fill" style={{ width: pct(p.completeness) }} />
             <span className="meter__label mono">{pct(p.completeness)}</span>
           </div>
-        ) : (
-          <p className="muted small">Not reported.</p>
-        )}
-        {p.missing_inputs.length > 0 && (
-          <p className="small missing">Missing or uncertain: {p.missing_inputs.join(', ')}</p>
-        )}
-      </section>
-
-      <section>
-        <h3 className="section-title">Sources</h3>
-        {p.sources.length ? (
-          <dl className="kv">
-            {p.sources.map((s) => (
-              <div key={s.name} className="kv__row">
-                <dt>{s.name}</dt>
-                <dd className="mono">{s.observed_at ?? '—'}</dd>
-              </div>
-            ))}
-          </dl>
-        ) : (
-          <p className="muted small">Not reported.</p>
-        )}
-      </section>
+          {p.missing_inputs.length > 0 && <p className="small missing">Missing or uncertain: {p.missing_inputs.join(', ')}</p>}
+        </section>
+      )}
+      {(data || sources.length > 0) && (
+        <section>
+          <h3 className="section-title">Sources</h3>
+          <SourcesList sources={sources} />
+        </section>
+      )}
     </>
   );
 }
@@ -339,7 +520,17 @@ const CW = 340;
 const CH = 128;
 const PAD = { l: 34, r: 10, t: 10, b: 22 };
 
-export function MovementChart({ points, color }: { points: MovementPoint[]; color: string }) {
+export function MovementChart({
+  points,
+  color,
+  baselineLabel,
+}: {
+  points: MovementPoint[];
+  color: string;
+  /** Label for the dashed comparison line; defaults to the mock data's seasonal/thermal baseline. */
+  baselineLabel?: string;
+}) {
+  const baseLabel = baselineLabel ?? 'Seasonal/thermal baseline';
   const times = points.map((p) => Date.parse(p.date));
   const vals = points.flatMap((p) => [p.displacement_mm, p.baseline_mm ?? 0]);
   const t0 = Math.min(...times), t1 = Math.max(...times);
@@ -394,7 +585,7 @@ export function MovementChart({ points, color }: { points: MovementPoint[]; colo
           <i style={{ background: color }} /> Observed (mm)
           {baseline && (
             <>
-              <i className="chart__key-dash" /> Seasonal/thermal baseline
+              <i className="chart__key-dash" /> {baseLabel}
             </>
           )}
         </span>
@@ -402,10 +593,12 @@ export function MovementChart({ points, color }: { points: MovementPoint[]; colo
           {points[0].date} → {last.date}
         </span>
       </figcaption>
-      {excess !== null && (
+      {/* Single-date comparison only for the mock's seasonal baseline; measured series are noisy per date. */}
+      {excess !== null && !baselineLabel && (
         <p className="small chart-note">
-          Latest observed {last.displacement_mm} mm vs baseline {last.baseline_mm} mm:{' '}
-          <strong className="mono">{excess > 0 ? '+' : ''}{excess.toFixed(1)} mm</strong> beyond expected seasonal movement.
+          Latest observed {last.displacement_mm} mm vs {baseLabel.toLowerCase()} {last.baseline_mm} mm:{' '}
+          <strong className="mono">{excess > 0 ? '+' : ''}{excess.toFixed(1)} mm</strong>{' '}
+          {baselineLabel ? 'relative to its surroundings.' : 'beyond expected seasonal movement.'}
         </p>
       )}
     </figure>

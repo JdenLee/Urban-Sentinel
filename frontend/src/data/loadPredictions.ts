@@ -12,6 +12,7 @@ import type {
   SourceRef,
 } from '../types/predictions';
 import { normalisePriority, priorityFromScore } from './priority';
+import { PREDICTION_SOURCES, type PredictionSource } from '../config';
 
 export const PREDICTIONS_URL = `${import.meta.env.BASE_URL}data/mock-predictions.json`;
 
@@ -38,7 +39,7 @@ export function binString(value: unknown): string | null {
   return /^\d{7}$/.test(s) ? s : null;
 }
 
-function parseMovement(raw: unknown): MovementPoint[] {
+export function parseMovement(raw: unknown): MovementPoint[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter(isObj)
@@ -47,7 +48,7 @@ function parseMovement(raw: unknown): MovementPoint[] {
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-function parseFactors(raw: unknown): Factors {
+export function parseFactors(raw: unknown): Factors {
   if (!isObj(raw)) return {};
   const out: Factors = {};
   for (const [k, v] of Object.entries(raw)) {
@@ -69,7 +70,7 @@ function parseContributions(raw: unknown): Contribution[] {
     .sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution));
 }
 
-function parseRecords(raw: unknown): RecordEvent[] {
+export function parseRecords(raw: unknown): RecordEvent[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter(isObj)
@@ -78,7 +79,7 @@ function parseRecords(raw: unknown): RecordEvent[] {
     .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
 }
 
-function parseSources(raw: unknown): SourceRef[] {
+export function parseSources(raw: unknown): SourceRef[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter(isObj)
@@ -106,6 +107,7 @@ function parseContractRecord(r: Json): Candidate | string {
     bin: '',
     score,
     rank: rank !== null && rank >= 1 ? Math.round(rank) : null,
+    rank_total: null,
     priority: normalisePriority(r.priority) ?? priorityFromScore(score),
     confidence: unit(r.confidence),
     address: str(r.address),
@@ -134,7 +136,8 @@ function parseMlServiceRecord(r: Json): Candidate | string {
   if (score === null) return 'missing or non-numeric probability';
   if (score < 0 || score > 1) return `probability ${score} outside [0, 1]`;
   const drivers = Array.isArray(r.drivers) ? r.drivers.filter(isObj) : [];
-  const factors: Factors = {};
+  // Export-time factors (e.g. sar_velocity_mm_year for the movement layer) plus the drivers' values.
+  const factors: Factors = parseFactors(r.factors);
   for (const d of drivers) {
     const label = str(d.label) ?? str(d.feature);
     if (label) factors[label] = (d.value as string | number | null) ?? null;
@@ -146,6 +149,7 @@ function parseMlServiceRecord(r: Json): Candidate | string {
     bin: '',
     score,
     rank: rank !== null && rank >= 1 ? Math.round(rank) : null,
+    rank_total: num(p.of) !== null && (num(p.of) as number) >= 1 ? Math.round(num(p.of) as number) : null,
     priority: normalisePriority(p.tier, true) ?? priorityFromScore(score),
     confidence: null,
     address: str(r.address),
@@ -175,6 +179,15 @@ function parseMlServiceRecord(r: Json): Candidate | string {
     missing_inputs: strList(r.missing),
     sources: [],
   };
+}
+
+/** One ML-service record (e.g. from GET /buildings/{bin}/history) as a prediction, or null if unscored. */
+export function mlRecordToPrediction(raw: unknown): BuildingPrediction | null {
+  if (!isObj(raw) || !isObj(raw.prediction)) return null;
+  const bin = binString(raw.bin);
+  const parsed = parseMlServiceRecord(raw);
+  if (!bin || typeof parsed === 'string') return null;
+  return { ...parsed, bin, rank: parsed.rank ?? 0 };
 }
 
 function parseModel(raw: Json): ModelInfo {
@@ -301,4 +314,28 @@ export async function loadPredictions(url = PREDICTIONS_URL, signal?: AbortSigna
     console.warn(`[predictions] ${set.rejected.length} record(s) skipped`, set.rejected.slice(0, 20));
   }
   return set;
+}
+
+/** Try each configured source in order (live API → LinuxONE snapshot → mock); report which one was used. */
+export async function loadPredictionsWithFallback(
+  signal?: AbortSignal,
+  sources: PredictionSource[] = PREDICTION_SOURCES,
+): Promise<{ set: PredictionSet; source: PredictionSource; failures: string[] }> {
+  const failures: string[] = [];
+  for (const source of sources) {
+    // The live API gets one retry: a transient tunnel hiccup should not drop a recording to mock data.
+    const attempts = source.id === 'live-api' ? 2 : 1;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        const timeout = AbortSignal.timeout(15000);
+        const set = await loadPredictions(source.url, signal ? AbortSignal.any([signal, timeout]) : timeout);
+        if (set.buildings.length === 0) throw new Error('no scored buildings');
+        return { set, source, failures };
+      } catch (err) {
+        if (signal?.aborted) throw err;
+        failures.push(`${source.label} (attempt ${attempt}): ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }
+  throw new Error(`No prediction source could be loaded. ${failures.join(' · ')}`);
 }

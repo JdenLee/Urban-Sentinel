@@ -38,6 +38,8 @@ export interface BuildingPrediction {
   bin: string;
   score: number;
   rank: number;
+  /** Size of the ranked set `rank` is out of (ML export's `prediction.of`); null = the whole prediction file. */
+  rank_total: number | null;
   priority: Priority;
   confidence: number | null;
   address: string | null;
@@ -113,6 +115,57 @@ export interface JoinedProperties extends BuildingProperties {
   prediction: BuildingPrediction | null;
 }
 export type JoinedFeature = Feature<BuildingGeometry, JoinedProperties>;
+
+/** A building chosen from search: BIN plus where to fly when it has no footprint in the scene. */
+export interface LookupTarget {
+  bin: string;
+  label: string | null;
+  lonLat: [number, number] | null;
+}
+
+/** InSAR series metadata from GET /buildings/{bin}/history (ml/insar/export_series.py). */
+export interface MovementSeriesMeta {
+  measurement: string;
+  units: string;
+  source: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  baseline_label: string | null;
+  sign: string | null;
+  note: string | null;
+}
+
+export interface HistoryRecord extends RecordEvent {
+  /** FISP filing status (SAFE / SWARMP / UNSAFE / No Report Filed), when the record is a filing. */
+  status: string | null;
+}
+
+/** Everything on record for one building, from the ML API's history endpoint. */
+export interface BuildingHistory {
+  bin: string;
+  inFisp: boolean;
+  address: string | null;
+  borough: string | null;
+  lonLat: [number, number] | null;
+  /** Present when the building has a current-cycle prediction; null if already filed or not in FISP. */
+  prediction: BuildingPrediction | null;
+  fisp: {
+    statusOnRecord: string | null;
+    currentCycle: number | null;
+    currentCycleFiled: boolean | null;
+    filingWindowCloses: string | null;
+  } | null;
+  records: HistoryRecord[];
+  movement: { meta: MovementSeriesMeta; points: MovementPoint[]; velocityHp: number | null } | null;
+  sources: SourceRef[];
+}
+
+export type HistoryState =
+  | { status: 'idle' }
+  | { status: 'unavailable' }
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'ready'; data: BuildingHistory };
 
 export interface JoinResult {
   features: JoinedFeature[];
