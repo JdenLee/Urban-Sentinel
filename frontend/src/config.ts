@@ -30,3 +30,13 @@ export const GEOSEARCH_URL =
 
 /** NYC Building Footprints (Socrata), used to draw a looked-up building outside the demo area. */
 export const FOOTPRINTS_URL = 'https://data.cityofnewyork.us/resource/5zhs-2jue.geojson';
+
+/** NYC Building Footprints attributes (BIN → tax lot) and MapPLUTO (tax-lot facts), both Socrata, no key. */
+export const FOOTPRINT_ATTRS_URL = 'https://data.cityofnewyork.us/resource/5zhs-2jue.json';
+export const PLUTO_URL = 'https://data.cityofnewyork.us/resource/64uk-42ks.json';
+
+/** NYS statewide orthoimagery (NYS ITS Geospatial Services), ArcGIS export endpoint: free, no key. */
+export const AERIAL_EXPORT_URL = 'https://orthos.its.ny.gov/arcgis/rest/services/wms/Latest/MapServer/export';
+
+/** Wikimedia Commons API, for the curated landmark photos and their credits. */
+export const COMMONS_API_URL = 'https://commons.wikimedia.org/w/api.php';

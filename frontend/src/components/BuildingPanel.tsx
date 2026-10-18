@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import type {
   BuildingHistory,
   BuildingPrediction,
@@ -15,7 +15,9 @@ import { ASSIGNMENT_LABEL, ASSIGNMENT_STATUSES, type AssignmentStatus } from '..
 import { RECORD_TYPES } from '../data/loadHistory';
 import { DOB_NOW_PORTAL_URL, cycleFromDescription, dobBisFacadesUrl, dobBisProfileUrl, openDataFilingUrl } from '../data/recordLinks';
 import { LiveRescore } from './LiveRescore';
+import { BuildingProfile } from './BuildingProfile';
 import { buildingName, landmarkFor } from '../data/landmarks';
+import type { Geometry } from 'geojson';
 import { useDragSheet } from '../motion/useDragSheet';
 import { useMediaQuery } from '../motion/useMediaQuery';
 import { usePress } from '../motion/usePress';
@@ -86,6 +88,10 @@ export interface BuildingPanelProps {
   onOpenModelCard: () => void;
   /** Coverage reason wording from the export, for buildings without a score. */
   coverageLabels?: Record<string, string> | null;
+  /** Footprint geometry for the aerial photo: the scene's, or the one fetched for a looked-up building. */
+  geometry?: Geometry | null;
+  /** Roof height in metres for buildings without a scene footprint (from the fetched footprint). */
+  geometryHeightM?: number | null;
   onClose: () => void;
 }
 
@@ -111,6 +117,16 @@ export function BuildingPanel(props: BuildingPanelProps) {
   // Below this width glass.css lays the record out as a bottom sheet, which is the only form that
   // can be dragged away. Asking the same query the stylesheet used keeps the two in step.
   const isSheet = useMediaQuery('(max-width: 760px)');
+  // Real imagery and lot facts. A scored building leads with its score, so this follows it there.
+  const profile = (
+    <BuildingProfile
+      bin={bin}
+      geometry={props.geometry ?? feature?.geometry ?? null}
+      heightM={feature?.properties.height_m ?? props.geometryHeightM ?? 0}
+      landmark={landmark}
+      knownFloors={feature?.properties.floors ?? null}
+    />
+  );
   const { sheetRef, grabberProps } = useDragSheet(isSheet, onClose);
 
   return (
@@ -155,8 +171,9 @@ export function BuildingPanel(props: BuildingPanelProps) {
       )}
 
       <div className="building-panel__body" role="tabpanel">
+        {!p && profile}
         {!p && <NoScoreNotice feature={feature} bin={bin} labels={props.coverageLabels} />}
-        {active === 'overview' && p && <OverviewTab {...props} p={p} color={color} />}
+        {active === 'overview' && p && <OverviewTab {...props} p={p} color={color} profile={profile} />}
         {active === 'evidence' && p && <EvidenceTab p={p} />}
         {active === 'history' && <HistoryTab p={p} history={history} color={color} bin={bin} />}
         {landmark && <p className="landmark-source"><a href={landmark.source} target="_blank" rel="noreferrer">About this landmark ↗</a></p>}
@@ -185,7 +202,7 @@ export function BuildingPanel(props: BuildingPanelProps) {
   );
 }
 
-function OverviewTab({ p, color, modelCard, onOpenModelCard }: BuildingPanelProps & { p: BuildingPrediction; color: string }) {
+function OverviewTab({ p, color, modelCard, onOpenModelCard, profile }: BuildingPanelProps & { p: BuildingPrediction; color: string; profile: ReactNode }) {
   const scoreIsProbability = p.probability !== null && Math.abs(p.probability - p.score) < 1e-9;
   const consequence = Object.entries(p.consequence);
   return (
@@ -238,6 +255,8 @@ function OverviewTab({ p, color, modelCard, onOpenModelCard }: BuildingPanelProp
           {modelCard.score_definition ?? (scoreIsProbability ? modelCard.target : null) ?? 'Normalized priority score, 0–1.'}
         </p>
       </section>
+
+      {profile}
 
       <LiveRescore bin={p.bin} storedProbability={p.probability} />
 

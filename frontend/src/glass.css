@@ -203,7 +203,9 @@ body { background: #000; font: var(--t-body) var(--font); color: var(--label); }
   -webkit-backdrop-filter: var(--blur-regular);
   border: 1px solid var(--separator); box-shadow: var(--shadow-float);
 }
-.brand__mark { width: 20px; height: 20px; flex: none; color: var(--tint); }
+.brand__mark { width: 22px; height: 22px; flex: none; color: var(--tint); overflow: visible; }
+.brand__beacon { animation: brand-beacon 2.4s ease-in-out infinite; filter: drop-shadow(0 0 2px currentColor); }
+@keyframes brand-beacon { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 .title { margin: 0; font: var(--t-title3) var(--font); letter-spacing: -0.015em; color: var(--label); text-shadow: none; }
 .subtitle {
   margin: 1px 0 0; font: var(--t-caption) var(--font); letter-spacing: 0.04em;
@@ -283,19 +285,21 @@ body { background: #000; font: var(--t-body) var(--font); color: var(--label); }
 .toggle__text { flex: 1; gap: 1px; }
 .toggle__label { font: var(--t-body) var(--font); color: var(--label); }
 .toggle__hint { font: var(--t-footnote) var(--font); color: var(--label-3); }
-/* The iOS switch: a travelling thumb, not a colour swap. */
+/*
+ * Switch: a squared slot with a small square key. On, the key moves right and takes the accent; the
+ * slot takes a faint wash of it. Position and colour both carry the state.
+ */
 .toggle__track {
-  width: 40px; height: 24px; border-radius: var(--r-pill);
-  background: var(--fill-2); border: 1px solid transparent;
-  transition: background-color var(--dur-press) var(--ease-press);
+  width: 38px; height: 20px; border-radius: 5px;
+  background: var(--fill-4); border: 1px solid var(--separator-strong);
+  transition: background-color var(--dur-press) var(--ease-press), border-color var(--dur-press) var(--ease-press);
 }
 .toggle__thumb {
-  top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.35);
-  transition: transform var(--dur-press) var(--ease-press);
+  top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 3px; background: var(--label-3);
+  transition: transform var(--dur-press) var(--ease-press), background-color var(--dur-press) var(--ease-press);
 }
-.toggle input:checked + .toggle__track { background: var(--tint); border-color: transparent; }
-.toggle input:checked + .toggle__track .toggle__thumb { transform: translateX(16px); background: #fff; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.35); }
+.toggle input:checked + .toggle__track { background: var(--tint-quiet); border-color: color-mix(in srgb, var(--tint) 55%, transparent); }
+.toggle input:checked + .toggle__track .toggle__thumb { transform: translateX(18px); background: var(--tint); box-shadow: none; }
 .toggle input:focus-visible + .toggle__track { outline: 2px solid var(--tint); outline-offset: 3px; }
 
 .controls__buttons { gap: var(--sp-2); margin-top: var(--sp-1); }
@@ -615,6 +619,64 @@ body { background: #000; font: var(--t-body) var(--font); color: var(--label); }
   .demo-strip__fill { animation: none; transform: scaleX(1); }
   .btn, .icon-btn, .chip, .tabs__tab, .toplist__item, .legend__row--btn, .search__item,
   .model-link, .drawer-btn, .toggle__thumb, .toggle__track { transition: none; }
+  .brand__beacon { animation: none; }
   .btn:active, .icon-btn:active, .chip:active, .toplist__item:active,
   .legend__row--btn:active, .search__item:active, .tabs__tab:active, .drawer-btn:active { transform: none; }
 }
+
+/* ---------- building profile: real imagery and lot facts ---------- */
+/*
+ * The photo is evidence about the building, not a reading, so it carries no tint of its own. The
+ * footprint outline takes the record's --accent, the same colour the building wears on the map.
+ */
+.profile { display: flex; flex-direction: column; gap: var(--sp-3); }
+.profile__media { position: relative; margin: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
+.profile__frame {
+  position: relative; aspect-ratio: 9 / 5; overflow: hidden; border-radius: var(--r-control);
+  background: var(--fill-4); box-shadow: inset 0 0 0 1px var(--separator);
+}
+.profile__frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.profile__frame svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.profile__frame path {
+  fill: color-mix(in srgb, var(--accent) 14%, transparent); stroke: var(--accent); stroke-width: 3;
+  stroke-linejoin: round; vector-effect: non-scaling-stroke; filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.7));
+}
+/* Landmark photos are of towers: a taller frame, biased up so the crown stays in it. */
+.profile__frame--photo { aspect-ratio: 4 / 3; }
+.profile__frame--photo img { object-position: 50% 22%; }
+.profile__frame--loading { background: linear-gradient(100deg, var(--fill-4) 30%, var(--fill-3) 50%, var(--fill-4) 70%) 0 0 / 300% 100%; animation: profile-shimmer 1.4s linear infinite; }
+.profile__frame--loading img { opacity: 0; }
+.profile__frame--empty { display: grid; place-items: center; font: var(--t-callout) var(--font); color: var(--label-3); }
+@keyframes profile-shimmer { to { background-position: -150% 0; } }
+.profile__switch {
+  position: absolute; top: var(--sp-2); left: var(--sp-2); display: flex; padding: 2px; gap: 2px;
+  border-radius: var(--r-small); background: var(--mat-thick); -webkit-backdrop-filter: var(--blur-thin); backdrop-filter: var(--blur-thin);
+}
+.profile__switch button {
+  padding: 3px var(--sp-2); border: 0; border-radius: 5px; background: none; cursor: pointer;
+  font: var(--t-subhead) var(--font); color: var(--label-2);
+}
+.profile__switch button.is-on { background: var(--fill-1); color: var(--label); }
+.profile__credit {
+  display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-2);
+  font: var(--t-footnote) var(--font); color: var(--label-3);
+}
+.profile__credit > :first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile__credit a { color: var(--label-3); text-decoration: none; }
+.profile__credit a:hover { color: var(--label); text-decoration: underline; }
+.profile__credit .profile__street { flex: none; color: var(--tint); }
+.profile__stats { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); }
+.profile__stat {
+  display: flex; flex-direction: column; gap: 2px; padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-control); background: var(--fill-4);
+}
+.profile__stat dt { order: 2; font: var(--t-footnote) var(--font); color: var(--label-2); }
+.profile__stat dd { order: 1; margin: 0; font: var(--t-title3) var(--mono); color: var(--label); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.profile__note { margin: var(--sp-2) 0 0; font: var(--t-footnote) var(--font); color: var(--label-2); }
+.profile__more { margin-top: var(--sp-2); }
+.profile__more summary { cursor: pointer; font: var(--t-subhead) var(--font); color: var(--label-2); padding: var(--sp-1) 0; }
+.profile__more summary:hover { color: var(--label); }
+.profile__more .kv { margin-top: var(--sp-1); }
+.profile__source { margin: var(--sp-2) 0 0; font: var(--t-footnote) var(--font); color: var(--label-3); }
+.profile__source a { color: var(--label-2); }
+@media (prefers-reduced-motion: reduce) { .profile__frame--loading { animation: none; } }
