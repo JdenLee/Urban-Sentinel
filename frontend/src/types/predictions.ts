@@ -131,6 +131,8 @@ export interface BuildingProperties {
   material?: FacadeMaterial | null;
   /** 'filing' when an inspector recorded the wall type, 'inferred' when derived from era and use. */
   material_source?: MaterialSource | null;
+  /** Source footprint components, retained with their individual measured roof heights. */
+  parts?: { geometry: BuildingGeometry; height_m: number | null }[];
 }
 
 export type BuildingGeometry = Polygon | MultiPolygon;

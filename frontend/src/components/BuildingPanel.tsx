@@ -21,6 +21,7 @@ import type { Geometry } from 'geojson';
 import { useDragSheet } from '../motion/useDragSheet';
 import { useMediaQuery } from '../motion/useMediaQuery';
 import { usePress } from '../motion/usePress';
+import { HistoryReplay } from './HistoryReplay';
 
 const FACTOR_LABELS: Record<string, { label: string; unit?: string }> = {
   sar_velocity_mm_year: { label: 'LOS velocity', unit: 'mm/yr' },
@@ -43,7 +44,7 @@ function formatFactor(key: string, value: number | string | null) {
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 
 export type Tab = 'overview' | 'evidence' | 'history';
-const TAB_LABEL: Record<Tab, string> = { overview: 'Overview', evidence: 'Evidence', history: 'History' };
+const TAB_LABEL: Record<Tab, string> = { overview: 'Summary', evidence: 'Why this score?', history: 'History' };
 
 /** Scored buildings get the model tabs; every building gets its recorded history. */
 export function panelTabs(scored: boolean): Tab[] {
@@ -57,9 +58,21 @@ function TabButton({ tab, active, onSelect }: { tab: Tab; active: boolean; onSel
     <button
       type="button"
       role="tab"
+      id={`building-tab-${tab}`}
+      aria-controls="building-tab-panel"
       aria-selected={active}
+      tabIndex={active ? 0 : -1}
       className={`tabs__tab${active ? ' is-active' : ''}`}
       {...press}
+      onKeyDown={(e) => {
+        const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
+        if (!keys.includes(e.key)) return;
+        e.preventDefault();
+        const order: Tab[] = ['overview', 'evidence', 'history'];
+        const index = e.key === 'Home' ? 0 : e.key === 'End' ? 2 : (order.indexOf(tab) + (e.key === 'ArrowRight' ? 1 : 2)) % 3;
+        onSelect(order[index]);
+        document.getElementById(`building-tab-${order[index]}`)?.focus();
+      }}
     >
       {TAB_LABEL[tab]}
     </button>
@@ -70,6 +83,7 @@ function TabButton({ tab, active, onSelect }: { tab: Tab; active: boolean; onSel
 const TIMELINE_PREVIEW = 40;
 
 export interface BuildingPanelProps {
+  isMock?: boolean;
   bin: string;
   /** Footprint in the scene (scored or context), if any. */
   feature: JoinedFeature | null;
@@ -96,7 +110,7 @@ export interface BuildingPanelProps {
 }
 
 function eyebrowFor(p: BuildingPrediction | null, history: HistoryState, total: number, scope: 'area' | 'citywide'): string {
-  if (p) return `Rank #${p.rank.toLocaleString()} of ${(p.rank_total ?? total).toLocaleString()} ${scope === 'citywide' ? 'citywide' : 'in this area'}`;
+  if (p) return `Rank #${p.rank.toLocaleString()} of ${(p.rank_total ?? total).toLocaleString()} ${scope === 'citywide' ? 'citywide' : 'in this export'}`;
   if (history.status === 'loading') return 'Loading records…';
   if (history.status !== 'ready') return 'Building';
   if (!history.data.inFisp) return 'Not in the façade inspection program';
@@ -170,17 +184,14 @@ export function BuildingPanel(props: BuildingPanelProps) {
         </div>
       )}
 
-      <div className="building-panel__body" role="tabpanel">
-        {!p && profile}
+      <div className="building-panel__body" role="tabpanel" id="building-tab-panel" aria-labelledby={tabs.length > 1 ? `building-tab-${active}` : undefined} aria-label={tabs.length === 1 ? 'Building history' : undefined}>
+        {!p && <details className="detail-fold"><summary>Building photo &amp; facts</summary>{profile}</details>}
         {!p && <NoScoreNotice feature={feature} bin={bin} labels={props.coverageLabels} />}
         {active === 'overview' && p && <OverviewTab {...props} p={p} color={color} profile={profile} />}
         {active === 'evidence' && p && <EvidenceTab p={p} />}
-        {active === 'history' && <HistoryTab p={p} history={history} color={color} bin={bin} />}
-        {landmark && <p className="landmark-source"><a href={landmark.source} target="_blank" rel="noreferrer">About this landmark ↗</a></p>}
-      </div>
-
-      <footer className="building-panel__foot">
+        {active === 'history' && <HistoryTab p={p} history={history} color={color} bin={bin} isMock={props.isMock ?? false} />}
         {p && rankScope === 'area' && (
+          <details className="detail-fold"><summary>Inspection workflow</summary>
           <label className="status-select">
             <span>Inspection status</span>
             <select value={status} onChange={(e) => onStatusChange(e.target.value as AssignmentStatus)}>
@@ -191,12 +202,15 @@ export function BuildingPanel(props: BuildingPanelProps) {
               ))}
             </select>
           </label>
+          </details>
         )}
+        {landmark && <p className="landmark-source">{landmark.model && 'Illustrative shape, not a surveyed mesh. '}<a href={landmark.source} target="_blank" rel="noreferrer">About this landmark ↗</a></p>}
+      </div>
+
+      <footer className="building-panel__foot">
         <p className="disclaimer">
-          Decision-support tool; field inspection required. Ranks buildings for review — not a structural simulation or
-          a prediction of failure.
+          Inspection support, not a collapse prediction. Field inspection required.
         </p>
-        <p className="geometry-note">{landmark?.model ? 'Illustrative landmark model. Façade detail is approximate.' : 'Building shapes and close-up façade details are approximate.'}</p>
       </footer>
     </aside>
   );
@@ -210,7 +224,7 @@ function OverviewTab({ p, color, modelCard, onOpenModelCard, profile }: Building
       <section>
         <div className="score-row">
           <div className="score">
-            <span className="score__value mono">{p.score.toFixed(2)}</span>
+            <span className="score__value">{scoreIsProbability ? pct(p.probability!) : p.score.toFixed(2)}</span>
             <span className="score__label">
               {scoreIsProbability ? 'Predicted probability' : 'Priority score'}
               <button type="button" className="info-btn" onClick={onOpenModelCard} aria-label="What does this score mean?">
@@ -223,10 +237,34 @@ function OverviewTab({ p, color, modelCard, onOpenModelCard, profile }: Building
           </span>
         </div>
         <ScoreBar score={p.score} interval={p.score_interval} />
+        {scoreIsProbability && <div className="probability-scale"><span>0%</span><span>Predicted UNSAFE filing</span><span>100%</span></div>}
+        <p className="score-def">
+          {scoreIsProbability ? 'Estimated chance of an UNSAFE rating in the next Initial FISP façade filing. Not the chance of collapse.' : 'A relative score for prioritizing field inspection, not a probability of collapse.'}
+        </p>
+
+      </section>
+
+      {p.explanations.length > 0 && p.contributions.length === 0 && (
+        <section>
+          <h3 className="section-title">At a glance</h3>
+          <ol className="explanations">
+            {p.explanations.slice(0, 3).map((e) => (
+              <li key={e}>{e}</li>
+            ))}
+          </ol>
+        </section>
+      )}
+
+      {p.contributions.length > 0 && <section>
+        <h3 className="section-title">What moved the prediction?</h3>
+        <ContributionBars items={[...p.contributions].sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution)).slice(0, 3)} />
+      </section>}
+        <details className="detail-fold"><summary>Score quality &amp; uncertainty</summary>
+        <p className="muted small">{modelCard.score_definition ?? modelCard.target ?? 'Normalized priority score, 0–1.'}</p>
         <dl className="kv">
           {!scoreIsProbability && p.probability !== null && (
             <div className="kv__row">
-              <dt>Predicted 12-month probability</dt>
+              <dt>Predicted probability</dt>
               <dd className="mono">{pct(p.probability)}</dd>
             </div>
           )}
@@ -251,31 +289,15 @@ function OverviewTab({ p, color, modelCard, onOpenModelCard, profile }: Building
             </div>
           )}
         </dl>
-        <p className="score-def">
-          {modelCard.score_definition ?? (scoreIsProbability ? modelCard.target : null) ?? 'Normalized priority score, 0–1.'}
-        </p>
-      </section>
-
-      {profile}
-
-      <LiveRescore bin={p.bin} storedProbability={p.probability} />
-
-      {p.explanations.length > 0 && (
-        <section>
-          <h3 className="section-title">Elevated warning signals</h3>
-          <ol className="explanations">
-            {p.explanations.slice(0, 3).map((e) => (
-              <li key={e}>{e}</li>
-            ))}
-          </ol>
-        </section>
-      )}
-
+        </details>
+      <details className="detail-fold"><summary>Building photo &amp; facts</summary>{profile}<p className="muted small">Source footprints and roof heights, where available. Façade textures and landmark geometry are illustrative, not a survey.</p></details>
+      <details className="detail-fold"><summary>Run a live prediction · LinuxONE</summary>
+        <LiveRescore bin={p.bin} storedProbability={p.probability} />
+      </details>
       {consequence.length > 0 && (
-        <section>
-          <h3 className="section-title">Consequence inputs</h3>
+        <details className="detail-fold"><summary>Exposure &amp; consequence inputs</summary>
           <FactorList entries={consequence} />
-        </section>
+        </details>
       )}
     </>
   );
@@ -285,10 +307,18 @@ function EvidenceTab({ p }: { p: BuildingPrediction }) {
   const factors = Object.entries(p.factors);
   return (
     <>
+      <section className="model-story">
+        <h3 className="section-title">How this prediction is made</h3>
+        <ol><li><strong>1</strong><span>Records before the cutoff<small>Filings, violations and building attributes</small></span></li>
+          <li><strong>2</strong><span>Decision trees add evidence<small>XGBoost combines small tree contributions</small></span></li>
+          <li><strong>3</strong><span>A calibrated probability<small>Estimated chance of an UNSAFE Initial FISP filing</small></span></li></ol>
+        <p className="muted small">This is an ensemble, not a single decision tree. The available export contains feature contributions, not individual tree paths.</p>
+      </section>
       {p.contributions.length > 0 && (
         <section>
-          <h3 className="section-title">Contribution to score</h3>
-          <ContributionBars items={p.contributions.slice(0, 6)} />
+          <h3 className="section-title">What raised or lowered the prediction?</h3>
+          <ContributionBars items={[...p.contributions].sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution)).slice(0, 6)} />
+          {p.contributions.length > 6 && <details className="detail-fold"><summary>All exported contributions ({p.contributions.length})</summary><ContributionBars items={p.contributions} /></details>}
         </section>
       )}
       {p.angular_distortion !== null && (
@@ -304,10 +334,9 @@ function EvidenceTab({ p }: { p: BuildingPrediction }) {
         </section>
       )}
       {factors.length > 0 && (
-        <section>
-          <h3 className="section-title">Model inputs</h3>
+        <details className="detail-fold"><summary>Available input details ({factors.length})</summary>
           <FactorList entries={factors} />
-        </section>
+        </details>
       )}
       <p className="muted small">Ground-movement history is on the History tab; it is context, not a model input.</p>
     </>
@@ -329,7 +358,7 @@ function HistoryNotice({ history }: { history: HistoryState }) {
       </p>
     );
   }
-  if (history.status === 'error') return <p className="notice">Building history could not be loaded right now. Available map data is still shown.</p>;
+  if (history.status === 'error') return <p className="notice">Live history is unavailable. Showing saved export records where available; these may be incomplete.</p>;
   return null;
 }
 
@@ -361,7 +390,7 @@ function FispSummary({ data }: { data: BuildingHistory }) {
   );
 }
 
-function MovementSection({ data, p, color }: { data: BuildingHistory | null; p: BuildingPrediction | null; color: string }) {
+function MovementSection({ data, p, color, synthetic = false }: { data: BuildingHistory | null; p: BuildingPrediction | null; color: string; synthetic?: boolean }) {
   const m = data?.movement ?? null;
   const points = m?.points ?? (p && p.movement_history.length >= 2 ? p.movement_history : []);
   if (points.length < 2) {
@@ -374,7 +403,7 @@ function MovementSection({ data, p, color }: { data: BuildingHistory | null; p: 
   }
   return (
     <section>
-      <h3 className="section-title">Ground movement (satellite, measured)</h3>
+      <h3 className="section-title">Ground movement ({synthetic ? 'synthetic demo' : 'satellite, measured'})</h3>
       <MovementChart points={points} color={color} baselineLabel={m?.meta.baseline_label ?? undefined} />
       {m && (
         <>
@@ -550,7 +579,7 @@ function OfficialRecords({ bin }: { bin: string }) {
   );
 }
 
-function HistoryTab({ p, history, color, bin }: { p: BuildingPrediction | null; history: HistoryState; color: string; bin: string }) {
+function HistoryTab({ p, history, color, bin, isMock }: { p: BuildingPrediction | null; history: HistoryState; color: string; bin: string; isMock: boolean }) {
   const data = history.status === 'ready' ? history.data : null;
   // Without the API, fall back to whatever the prediction file carries (the mock data has records and movement).
   const records = data ? data.records : (p?.record_history ?? []);
@@ -558,15 +587,15 @@ function HistoryTab({ p, history, color, bin }: { p: BuildingPrediction | null; 
   return (
     <>
       <HistoryNotice history={history} />
+      <HistoryReplay records={records} points={data?.movement?.points ?? p?.movement_history ?? []} isMock={isMock && !data} source={data?.movement?.meta.source ?? null} />
       {data && <FispSummary data={data} />}
-      <MovementSection data={data} p={p} color={color} />
+      <details className="detail-fold"><summary>Satellite measurement details</summary><MovementSection data={data} p={p} color={color} synthetic={isMock && !data} /></details>
       {(data || records.length > 0) && (
-        <section>
-          <h3 className="section-title">Record history</h3>
+        <details className="detail-fold"><summary>All source records ({records.length})</summary>
           <Timeline records={records} bin={bin} />
-        </section>
+        </details>
       )}
-      <OfficialRecords bin={bin} />
+      <details className="detail-fold"><summary>Open official NYC records</summary><OfficialRecords bin={bin} /></details>
       {p && p.completeness !== null && (
         <section>
           <h3 className="section-title">Data completeness</h3>
@@ -624,8 +653,8 @@ function ContributionBars({ items }: { items: Contribution[] }) {
           const up = c.contribution >= 0;
           return (
             <li key={c.label} className="contrib__row">
-              <span className="contrib__label" title={c.value ?? undefined}>
-                {c.label}
+              <span className="contrib__label" title={`${c.label}${c.value ? ': ' + c.value : ''}`}>
+                {plainFeatureLabel(c.label)}
                 {c.value && <span className="contrib__value"> · {c.value}</span>}
               </span>
               <span className="contrib__track">
@@ -642,9 +671,19 @@ function ContributionBars({ items }: { items: Contribution[] }) {
           );
         })}
       </ul>
-      <p className="muted small chart-note">Signed log-odds contribution; right raises priority, left lowers it.</p>
+      <p className="muted small chart-note">← Lowers prediction · Raises prediction →<br />Contributions are in log-odds, not percentage points or causes.</p>
     </>
   );
+}
+
+/** Presentation wording only; original labels remain in the hover text and raw-input disclosure. */
+function plainFeatureLabel(label: string) {
+  const labels: Record<string, string> = {
+    'Status on record now': 'Recorded façade status',
+    'Tax-lot size, sq ft (very large = multi-building development)': 'Tax-lot area (sq ft)',
+    'DOB violations (façade / Local Law 11), all prior': 'Prior façade violations',
+  };
+  return labels[label] ?? label;
 }
 
 const CW = 340;

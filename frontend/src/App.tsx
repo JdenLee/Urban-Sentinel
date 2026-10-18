@@ -8,7 +8,7 @@ import { RiskLegend } from './components/RiskLegend';
 import { SearchBox, Shortlist } from './components/Shortlist';
 import { MovementLegend } from './components/MovementLegend';
 import { ModelCardDialog } from './components/ModelCard';
-import { StatusStrip } from './components/StatusStrip';
+import { MapToolbar } from './components/MapToolbar';
 import { DemoController, useDemoRunner, type DemoTarget } from './components/DemoController';
 import { loadBuildings } from './data/loadBuildings';
 import { loadPredictionsWithFallback } from './data/loadPredictions';
@@ -82,7 +82,11 @@ export default function App() {
   const [showMovement, setShowMovement] = useState(false);
   const [selectedBin, setSelectedBin] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(() => !isNarrow());
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [cameraMode, setCameraMode] = useState<'orbit' | 'pan'>('orbit');
+  const [flat, setFlat] = useState(false);
+  const flatRef = useRef(flat);
+  flatRef.current = flat;
   const [modelCardOpen, setModelCardOpen] = useState(false);
   const [visiblePriorities, setVisiblePriorities] = useState<Set<Priority>>(() => new Set(PRIORITIES));
   const [capacity, setCapacity] = useState(25);
@@ -156,6 +160,7 @@ export default function App() {
     setVisiblePriorities(new Set(PRIORITIES));
     setShortlistOnly(false);
     setModelCardOpen(false);
+    setFlat(false);
     demo.start();
   }, [demo]);
 
@@ -179,7 +184,7 @@ export default function App() {
     map.flyTo({
       center,
       zoom: height > 300 ? 15.05 : height > 120 ? 15.7 : Math.max(map.getZoom(), 16.2),
-      pitch: height > 300 ? 52 : 60,
+      pitch: flatRef.current ? 0 : height > 300 ? 52 : 60,
       padding: isSheet()
         ? { top: height > 300 ? 130 : 72, bottom: Math.round(window.innerHeight * 0.68), left: gutter, right: gutter }
         : {
@@ -200,7 +205,7 @@ export default function App() {
       setPanelOpen(bin !== null);
       setLookupLabel(target?.label ?? null);
       pendingFly.current = false;
-      if (bin && isNarrow()) setSidebarOpen(false);
+      if (bin) { setSidebarOpen(false); framing.current.sidebar = false; }
       if (!bin || !fly) return;
       const f = featureByBin.get(bin);
       if (f) flyTo(featureCentroid(f), displayHeight(f));
@@ -278,6 +283,7 @@ export default function App() {
     demo.stop();
     setPanelOpen(false);
     setSelectedBin(null);
+    setFlat(false);
     mapRef.current?.getMap().flyTo({
       ...INITIAL_CAMERA,
       padding: { top: 0, bottom: 0, left: 0, right: 0 },
@@ -362,18 +368,37 @@ export default function App() {
         onSelect={(bin) => select(bin)}
         onUserInteract={demo.stop}
         onBasemapError={setBasemapError}
+        cameraMode={cameraMode}
+        flat={flat}
       />
-      <div className="vignette" aria-hidden />
 
       <AppHeader sidebarOpen={sidebarOpen} isMock={isMock}
         onToggleSidebar={() => setSidebarOpen((v) => !v)} onOpenModel={() => setModelCardOpen(true)} />
 
+      <div className="explorer-search panel">
+        <SearchBox scored={join.scored} features={join.features} onSelect={(bin) => select(bin, true)} onLookup={lookup} />
+      </div>
+      {!sidebarOpen && <div className="map-key panel" aria-label="Inspection priority legend">
+        <button type="button" className="map-key__toggle" aria-pressed={showRisk} onClick={() => setShowRisk((v) => !v)}>
+          Inspection priority <span>{showRisk ? 'On' : 'Off'}</span>
+        </button>
+        <div className="map-key__ramp" aria-hidden />
+        <div className="map-key__labels"><span>Low</span><span>Medium</span><span>High</span><span>Critical</span></div>
+        <p>Gray = no prediction · Click a building to explore</p>
+        <button type="button" className="text-link" onClick={() => setSidebarOpen(true)}>Explore priorities &amp; layers →</button>
+      </div>}
+      <MapToolbar mode={cameraMode} flat={flat} onMode={setCameraMode} onReset={resetView}
+        onNorth={() => mapRef.current?.getMap().easeTo({ bearing: 0, duration: prefersReducedMotion() ? 0 : 600 })}
+        onDimension={() => {
+          setFlat((v) => !v);
+          mapRef.current?.getMap().easeTo({ pitch: flat ? 55 : 0, duration: prefersReducedMotion() ? 0 : 700 });
+        }} />
+
       <aside id="sidebar" className="panel sidebar" aria-label="Map controls" hidden={!sidebarOpen}>
         <div className="workspace-heading">
-          <span className="workspace-heading__label">Inspection desk</span>
+          <span className="workspace-heading__label">Explore the city</span>
           <span className="workspace-heading__count mono">{join.scored.length.toLocaleString()} scored / {join.features.length.toLocaleString()} mapped</span>
         </div>
-        <SearchBox scored={join.scored} features={join.features} onSelect={(bin) => select(bin, true)} onLookup={lookup} />
         <LayerControls
           showRisk={showRisk}
           showMovement={movementOn}
@@ -384,6 +409,8 @@ export default function App() {
           onPlayDemo={startDemo}
           onReset={resetView}
         />
+        <details className="explore-section">
+        <summary>Priority filters &amp; coverage</summary>
         <RiskLegend
           scored={join.scored}
           features={join.features}
@@ -392,6 +419,9 @@ export default function App() {
           scoreLabel={scoreIsProbability ? 'Probability' : 'Score 0–1'}
           onToggle={togglePriority}
         />
+        </details>
+        <details className="explore-section" open>
+        <summary>Where to inspect first</summary>
         <Shortlist
           scored={join.scored}
           capacity={capacity}
@@ -402,6 +432,7 @@ export default function App() {
           onShortlistOnly={setShortlistOnly}
           onSelect={(bin) => select(bin, true)}
         />
+        </details>
         <div className="sidebar__foot">
           <span>Data as of <span className="mono">{fmtDate(predictions.data_as_of)}</span></span>
           <span>{isMock ? 'Synthetic demo data' : `Scored on ${predictions.model.execution_platform}`}</span>
@@ -430,6 +461,7 @@ export default function App() {
           onStatusChange={(s) => assignments.set(selectedBin, s)}
           onOpenModelCard={() => setModelCardOpen(true)}
           onClose={() => setPanelOpen(false)}
+          isMock={isMock}
         />
       )}
 
@@ -437,15 +469,10 @@ export default function App() {
 
       <DemoController running={demo.running} elapsed={demo.elapsed} stage={demo.stage} onStop={demo.stop} />
 
-      <StatusStrip
-        scored={join.scored.length}
-        mapped={join.features.length}
-        dataAsOf={predictions.data_as_of}
-        platform={predictions.model.execution_platform}
-        isMock={isMock}
-        selectedBin={selectedBin}
-        movementOn={movementOn}
-      />
+      <footer className="map-source">
+        {join.scored.length.toLocaleString()} predictions · {fmtDate(predictions.data_as_of)}
+        <span> · {load.source.label} · {isMock ? 'Synthetic demo' : predictions.model.execution_platform}</span>
+      </footer>
 
       {basemapError && (
         <div className="toast" role="alert">

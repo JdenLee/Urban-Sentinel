@@ -1,5 +1,5 @@
-import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react';
-import Map, { NavigationControl, type MapRef } from 'react-map-gl/maplibre';
+import { forwardRef, useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import Map, { NavigationControl, useMap, type MapRef } from 'react-map-gl/maplibre';
 import { AmbientLight, DirectionalLight, LightingEffect, type PickingInfo } from '@deck.gl/core';
 import type { StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -13,8 +13,9 @@ import { adaptBasemapStyle } from '../data/basemapStyle';
 import { CinematicOverlay } from './CinematicOverlay';
 import { buildingName, landmarkFor } from '../data/landmarks';
 import { pickedBuilding } from '../layers/landmarkLayer';
+import { useMediaQuery } from '../motion/useMediaQuery';
 
-export const BASEMAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
+export const BASEMAP_STYLE_URL = (import.meta.env.VITE_BASEMAP_STYLE_URL as string | undefined) || 'https://tiles.openfreemap.org/styles/positron';
 
 /**
  * The map fills the window and the panels float above it. That is what gives the translucent
@@ -27,7 +28,7 @@ const VIEWPORT: React.CSSProperties = { position: 'absolute', inset: 0 };
 const FALLBACK_STYLE: StyleSpecification = {
   version: 8,
   sources: {},
-  layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#070a12' } }],
+  layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#dce3e3' } }],
 };
 
 function useBasemapStyle(onError: (message: string) => void) {
@@ -67,6 +68,8 @@ export interface MapSceneProps {
   onSelect: (bin: string | null) => void;
   onUserInteract: () => void;
   onBasemapError: (message: string) => void;
+  cameraMode: 'orbit' | 'pan';
+  flat: boolean;
 }
 
 export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
@@ -84,9 +87,13 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
     onSelect,
     onUserInteract,
     onBasemapError,
+    cameraMode,
+    flat,
   },
   ref,
 ) {
+  const dragged = useRef(false);
+  const touch = useMediaQuery('(pointer: coarse)');
   const mapStyle = useBasemapStyle(onBasemapError);
   const context = useMemo(() => join.features.filter((f) => !f.properties.prediction), [join]);
   const points = useMemo(
@@ -132,6 +139,7 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
 
   const onClick = useCallback(
     (info: PickingInfo) => {
+      if (dragged.current) return;
       const f = pickedBuilding(info.object);
       onSelect(f ? f.properties.bin : null);
     },
@@ -163,6 +171,10 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
       minZoom={10}
       maxBounds={[-74.35, 40.45, -73.65, 40.95]}
       attributionControl={{ compact: true }}
+      dragPan={cameraMode === 'pan' || flat || touch}
+      dragRotate={!flat}
+      touchPitch={!flat}
+      onPitch={(e) => { if (flat && e.viewState.pitch !== 0) e.target.setPitch(0); }}
       onError={(e) => onBasemapError(e.error?.message ?? 'Basemap failed to load')}
       onMouseDown={onUserInteract}
       onTouchStart={onUserInteract}
@@ -170,10 +182,47 @@ export const MapScene = forwardRef<MapRef, MapSceneProps>(function MapScene(
       style={VIEWPORT}
     >
       <NavigationControl position="bottom-right" visualizePitch />
+      <OrbitInteraction enabled={!flat && cameraMode === 'orbit' && !touch} dragged={dragged} />
       <CinematicOverlay interleaved layers={layers} effects={effects} onClick={onClick} getTooltip={getTooltip} />
     </Map>
   );
 });
+
+/** Left-drag orbit uses public camera methods. Touch and right-drag remain native MapLibre gestures. */
+function OrbitInteraction({ enabled, dragged }: { enabled: boolean; dragged: React.MutableRefObject<boolean> }) {
+  const { current } = useMap();
+  useEffect(() => {
+    const map = current?.getMap();
+    if (!map) return;
+    const canvas = map.getCanvas();
+    let start: { x: number; y: number; bearing: number; pitch: number } | null = null;
+    const down = (e: MouseEvent) => {
+      dragged.current = false;
+      if (!enabled || e.button !== 0 || e.ctrlKey || e.metaKey) return;
+      start = { x: e.clientX, y: e.clientY, bearing: map.getBearing(), pitch: map.getPitch() };
+      map.stop();
+    };
+    const move = (e: MouseEvent) => {
+      if (!start || e.buttons !== 1) return;
+      const dx = e.clientX - start.x, dy = e.clientY - start.y;
+      if (Math.hypot(dx, dy) < 4 && !dragged.current) return;
+      dragged.current = true;
+      map.jumpTo({ bearing: start.bearing + dx * .28, pitch: Math.min(70, Math.max(10, start.pitch - dy * .22)) });
+    };
+    const up = () => { start = null; };
+    canvas.addEventListener('mousedown', down);
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+    window.addEventListener('blur', up);
+    return () => {
+      canvas.removeEventListener('mousedown', down);
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+      window.removeEventListener('blur', up);
+    };
+  }, [current, enabled, dragged]);
+  return null;
+}
 
 function escapeHtml(s: string) {
   return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);

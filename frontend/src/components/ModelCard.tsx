@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 import type { PredictionSet } from '../types/predictions';
-import { PRIORITY_RANGE } from '../data/priority';
 import type { PredictionSource } from '../config';
 import { formatDate } from '../data/formatDate';
 
@@ -44,8 +43,7 @@ export function ModelCardDialog({ predictions, source, onClose }: { predictions:
           <h3 className="section-title">What the score means</h3>
           <p>{card.score_definition ?? 'Normalized priority score from 0 to 1. Higher means review sooner.'}</p>
           <p className="muted small">
-            Categories: Critical {PRIORITY_RANGE.critical} · High {PRIORITY_RANGE.high} · Medium {PRIORITY_RANGE.medium} · Low{' '}
-            {PRIORITY_RANGE.low}
+            Critical, High, Medium and Low are the supplied model tiers. These may be rank-percentile bands rather than fixed probability thresholds; the map legend shows observed ranges.
           </p>
           {card.confidence_definition && <p className="muted small">Confidence: {card.confidence_definition}</p>}
         </section>

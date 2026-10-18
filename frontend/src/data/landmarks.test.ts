@@ -5,7 +5,7 @@ import { parseBuildings } from './loadBuildings';
 import { joinByBin } from './joinByBin';
 import { parsePredictions } from './loadPredictions';
 import { combineSearchResults } from './shortlist';
-import { oneWtcGeometry, WTC_ROOF_M, WTC_SPIRE_M } from './landmarkGeometry';
+import { oneWtcGeometry, setbackGeometry, WTC_ROOF_M, WTC_SPIRE_M } from './landmarkGeometry';
 import { pickedBuilding } from '../layers/landmarkLayer';
 
 const read = (name: string) => JSON.parse(readFileSync(new URL(`../../public/data/${name}`, import.meta.url), 'utf8'));
@@ -38,6 +38,20 @@ describe('landmark identity without fabricated scores', () => {
 });
 
 describe('illustrative One WTC geometry', () => {
+  it('keeps stepped landmarks at documented heights, finite, and BIN-linked without mutating footprints', () => {
+    for (const [bin, kind, height] of [['1087167', 'woolworth', 241.4], ['1001018', '40-wall', 282.6]] as const) {
+      const feature = join.features.find((f) => f.properties.bin === bin)!;
+      const before = JSON.stringify(feature);
+      const geometry = setbackGeometry(feature, kind);
+      expect(geometry.faces.length).toBeGreaterThan(20);
+      expect(geometry.faces.some((f) => f.crown)).toBe(true);
+      expect(Math.max(...geometry.faces.flatMap((f) => f.polygon.map((p) => p[2])))).toBe(height);
+      expect(geometry.faces.every((f) => f.polygon.every((p) => p.every(Number.isFinite)))).toBe(true);
+      expect(pickedBuilding(geometry.faces[0])).toBe(feature);
+      expect(JSON.stringify(feature)).toBe(before);
+    }
+    expect(buildingName('1001018')).toBe('40 Wall Street');
+  });
   it('has a faceted body, a roof below the spire, and only finite coordinates', () => {
     const g = oneWtcGeometry(wtc);
     const body = g.faces.flatMap((f) => f.polygon);

@@ -30,6 +30,9 @@ export function parseBuildings(raw: unknown): BuildingCollection {
         floors: Number.isFinite(floors) && floors > 0 ? floors : null,
         material: isFacadeMaterial(material) ? material : null,
         material_source: f.properties.material_source === 'filing' ? 'filing' : 'inferred',
+        parts: Array.isArray(f.properties.parts) ? f.properties.parts
+          .filter((part) => part?.geometry?.type === 'Polygon' || part?.geometry?.type === 'MultiPolygon')
+          .map((part) => ({ geometry: part.geometry, height_m: typeof part.height_m === 'number' && Number.isFinite(part.height_m) && part.height_m > 0 ? part.height_m : null })) : undefined,
       },
     });
   }

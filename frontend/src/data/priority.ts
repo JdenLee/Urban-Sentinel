@@ -42,12 +42,12 @@ export const PRIORITY_LABEL: Record<Priority, string> = {
 
 type RGB = [number, number, number];
 export const PRIORITY_COLOR: Record<Priority, RGB> = {
-  low: [56, 140, 255],
-  medium: [250, 214, 56],
-  high: [255, 140, 26],
-  critical: [255, 46, 64],
+  low: [113, 153, 168],
+  medium: [211, 188, 129],
+  high: [197, 133, 91],
+  critical: [166, 77, 70],
 };
-export const UNSCORED_COLOR: RGB = [52, 60, 78];
+export const UNSCORED_COLOR: RGB = [182, 179, 168];
 /** Results already recorded this cycle: muted, so they read as "on file" rather than as predictions. */
 export const RECORDED_COLOR: Record<string, RGB> = {
   UNSAFE: [150, 64, 72],
@@ -56,8 +56,8 @@ export const RECORDED_COLOR: Record<string, RGB> = {
 };
 export const RECORDED_ORDER = ['UNSAFE', 'SWARMP', 'SAFE'] as const;
 /** Scored buildings hidden by a filter or capacity cutoff. */
-export const FILTERED_COLOR: RGB = [70, 78, 96];
-export const SELECTED_COLOR: RGB = [180, 255, 255];
+export const FILTERED_COLOR: RGB = [172, 176, 171];
+export const SELECTED_COLOR: RGB = [70, 119, 125];
 
 /** Legend ranges with half-open bounds so no score falls in two categories. */
 export const PRIORITY_RANGE: Record<Priority, string> = {

@@ -2,13 +2,43 @@ import type { JoinedFeature } from '../types/predictions';
 import { featureCentroid } from './joinByBin';
 
 export type Position3 = [number, number, number];
-export interface LandmarkFace { polygon: Position3[]; shade: number; feature: JoinedFeature }
+export interface LandmarkFace { polygon: Position3[]; shade: number; feature: JoinedFeature; crown?: boolean }
 export interface LandmarkLine { path: Position3[] }
 export const WTC_ROOF_M = 417.1;
 export const WTC_SPIRE_M = 541.3;
 const PODIUM_M = 62;
 
 const interpolate = (a: Position3, b: Position3, t: number): Position3 => a.map((v, i) => v + (b[i] - v) * t) as Position3;
+
+/**
+ * Illustrative silhouettes, NOT surveyed architecture. Heights come from the Skyscraper Museum;
+ * tier widths/heights are visual approximations. The original NYC footprint remains untouched.
+ * Actual LoD2 meshes can replace these without changing building identity or model data.
+ */
+export function setbackGeometry(feature: JoinedFeature, kind: 'woolworth' | '40-wall') {
+  const center = featureCentroid(feature);
+  const ring = (feature.geometry.type === 'Polygon' ? feature.geometry.coordinates[0] : feature.geometry.coordinates[0][0]).slice(0, -1);
+  const total = kind === 'woolworth' ? 241.4 : 282.6;
+  const tiers = kind === 'woolworth'
+    ? [[0, 1], [.40, 1], [.40, .58], [.76, .58], [.76, .47], [.88, .47], [.88, .36], [1, .04]]
+    : [[0, 1], [.23, 1], [.23, .84], [.39, .84], [.39, .66], [.58, .66], [.58, .48], [.82, .48], [.82, .35], [.90, .35], [1, .025]];
+  const faces: LandmarkFace[] = [], edges: LandmarkLine[] = [], glazing: LandmarkLine[] = [];
+  const level = (height: number, scale: number) => ring.map(([x, y]): Position3 => [center[0] + (x - center[0]) * scale, center[1] + (y - center[1]) * scale, height * total]);
+  for (let t = 1; t < tiers.length; t++) {
+    const a = level(...tiers[t - 1] as [number, number]), b = level(...tiers[t] as [number, number]);
+    for (let i = 0; i < ring.length; i++) {
+      const j = (i + 1) % ring.length;
+      faces.push({ polygon: [a[i], a[j], b[j], b[i]], shade: .78 + (i % 4) * .07, feature, crown: t === tiers.length - 1 });
+      if (a[i][2] === b[i][2]) edges.push({ path: [b[i], b[j]] });
+      else for (let z = a[i][2] + 3.8; z < b[i][2]; z += 3.8) {
+        const u = (z - a[i][2]) / (b[i][2] - a[i][2]);
+        glazing.push({ path: [interpolate(a[i], b[i], u), interpolate(a[j], b[j], u)] });
+      }
+    }
+  }
+  faces.push({ polygon: level(1, .025), shade: 1, feature, crown: true });
+  return { faces, edges, glazing, spire: [] as LandmarkLine[] };
+}
 
 /** Illustrative SOM-inspired massing, anchored to the NYC footprint; not a surveyed mesh. */
 export function oneWtcGeometry(feature: JoinedFeature) {
