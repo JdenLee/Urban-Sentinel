@@ -25,6 +25,8 @@ function parseHistoryRecords(raw: unknown): HistoryRecord[] {
       type: str(r.type) ?? 'Record',
       description: str(r.description) ?? '',
       status: str(r.status),
+      cycle: num(r.cycle),
+      reference: str(r.reference),
     }))
     .filter((r) => r.description || r.date)
     .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));

@@ -2,7 +2,7 @@ import { GeoJsonLayer, ColumnLayer } from '@deck.gl/layers';
 import type { GeoJsonLayerProps } from '@deck.gl/layers';
 import type { Layer } from '@deck.gl/core';
 import type { JoinedFeature, Priority } from '../types/predictions';
-import { FILTERED_COLOR, PRIORITY_COLOR, SELECTED_COLOR, UNSCORED_COLOR } from '../data/priority';
+import { FILTERED_COLOR, PRIORITY_COLOR, RECORDED_COLOR, SELECTED_COLOR, UNSCORED_COLOR } from '../data/priority';
 import { featureCentroid } from '../data/joinByBin';
 import { landmarkFor } from '../data/landmarks';
 import { materialIndex, storeyHeight } from '../data/facadeMaterials';
@@ -97,12 +97,17 @@ export function buildingRiskLayers(options: BuildingLayerOptions): Layer[] {
       filled: true,
       stroked: false,
       getElevation: (f) => f.properties.height_m,
-      getFillColor: (f) => (f.properties.bin === selectedBin ? [...SELECTED_COLOR, 255] : CONTEXT_FILL),
+      getFillColor: (f) => {
+        if (f.properties.bin === selectedBin) return [...SELECTED_COLOR, 255];
+        const rec = showRisk ? f.properties.recorded : null;
+        const c = rec ? RECORDED_COLOR[rec.status] : undefined;
+        return c ? [...c, 255] : CONTEXT_FILL;
+      },
       material: MATERIAL,
       pickable: true,
       autoHighlight: true,
       highlightColor: [255, 255, 255, 40],
-      updateTriggers: { getFillColor: [selectedBin] },
+      updateTriggers: { getFillColor: [selectedBin, showRisk] },
     }),
     new GeoJsonLayer<JoinedFeature['properties']>({
       id: 'scored-buildings',

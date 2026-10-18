@@ -386,6 +386,8 @@ export default function App() {
         />
         <RiskLegend
           scored={join.scored}
+          features={join.features}
+          coverage={predictions.coverage}
           visible={visiblePriorities}
           scoreLabel={scoreIsProbability ? 'Probability' : 'Score 0–1'}
           onToggle={togglePriority}
@@ -414,6 +416,7 @@ export default function App() {
           key={selectedBin}
           bin={selectedBin}
           feature={selectedFeature}
+          coverageLabels={predictions.coverage?.labels ?? null}
           prediction={panelPrediction}
           history={history}
           fallbackTitle={lookupLabel}

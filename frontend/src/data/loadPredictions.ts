@@ -8,6 +8,8 @@ import type {
   MovementMeta,
   MovementPoint,
   PredictionSet,
+  RecordedOutcome,
+  Coverage,
   RecordEvent,
   SourceRef,
 } from '../types/predictions';
@@ -172,6 +174,8 @@ function parseMlServiceRecord(r: Json): Candidate | string {
         date: str(h.filed_on),
         type: ML_STATUS_TYPE,
         description: `Cycle ${num(h.cycle) ?? '?'}: ${str(h.status) ?? 'unknown'}`,
+        cycle: num(h.cycle),
+        reference: str(h.reference),
       }))
       .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')),
     consequence: {},
@@ -286,6 +290,21 @@ export function parsePredictions(raw: unknown): PredictionSet {
   );
   const buildings: BuildingPrediction[] = ordered.map((c, i) => ({ ...c, rank: allRanked ? (c.rank as number) : i + 1 }));
   const meta = isObj(raw.meta) ? raw.meta : {};
+  const recorded = new Map<string, RecordedOutcome>();
+  for (const r of Array.isArray(raw.recorded_buildings) ? raw.recorded_buildings : []) {
+    if (!isObj(r)) continue;
+    const bin = binString(r.bin);
+    const status = str(r.status);
+    if (bin && status) recorded.set(bin, { bin, status, cycle: num(r.cycle), filed_on: str(r.filed_on), reference: str(r.reference) });
+  }
+  const cov = isObj(raw.coverage) ? raw.coverage : null;
+  const coverage: Coverage | null = cov
+    ? {
+        counts: Object.fromEntries(Object.entries(isObj(cov.counts) ? cov.counts : {}).filter(([, v]) => typeof v === 'number')) as Record<string, number>,
+        labels: Object.fromEntries(Object.entries(isObj(cov.labels) ? cov.labels : {}).filter(([, v]) => typeof v === 'string')) as Record<string, string>,
+        reasons: new Map(Object.entries(isObj(cov.reasons) ? cov.reasons : {}).filter(([k, v]) => binString(k) && typeof v === 'string') as [string, string][]),
+      }
+    : null;
 
   return {
     schema_version: str(raw.schema_version) ?? 'ml-service',
@@ -297,6 +316,8 @@ export function parsePredictions(raw: unknown): PredictionSet {
     movement: parseMovementMeta(raw),
     buildings,
     rejected,
+    recorded,
+    coverage,
   };
 }
 

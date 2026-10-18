@@ -27,6 +27,8 @@ export function joinByBin(buildings: BuildingCollection, predictions: Prediction
         material: f.properties.material ?? DEFAULT_MATERIAL,
         material_source: f.properties.material_source ?? 'inferred',
         prediction,
+        recorded: prediction ? null : (predictions.recorded?.get(bin) ?? null),
+        unscoredReason: prediction ? null : (predictions.coverage?.reasons.get(bin) ?? null),
       },
     };
   });

@@ -2,6 +2,8 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { parseGroundMotion } from './loadGroundMotion';
 import { loadPredictionsWithFallback } from './loadPredictions';
 import { formatDate } from './formatDate';
+import { parsePredictions } from './loadPredictions';
+import { joinByBin } from './joinByBin';
 
 const mlRecord = (bin: string, probability: number, rank: number) => ({
   bin,
@@ -58,5 +60,37 @@ describe('formatDate', () => {
     expect(formatDate('2026-10-17T22:47:00Z')).toBe('2026-10-17');
     expect(formatDate('FISP cycle 9')).toBe('FISP cycle 9');
     expect(formatDate(null)).toBe('—');
+  });
+});
+
+describe('recorded outcomes and coverage reasons', () => {
+  const raw = {
+    data_mode: 'real',
+    buildings: [mlRecord('1000001', 0.8, 1)],
+    recorded_buildings: [{ bin: '1000002', status: 'UNSAFE', cycle: 10, filed_on: '2025-06-01', reference: 'TR6-1-10A-I1' }],
+    coverage: { counts: { low_rise: 1 }, labels: { low_rise: 'Six stories or fewer' }, reasons: { '1000003': 'low_rise', bad: 'x' } },
+  };
+  const square = (bin: string) => ({
+    type: 'Feature' as const,
+    geometry: { type: 'Polygon' as const, coordinates: [[[0, 0], [0, 1], [1, 1], [0, 0]]] },
+    properties: { bin, address: null, height_m: 30 },
+  });
+
+  it('parses recorded results and reasons, ignoring invalid BINs', () => {
+    const set = parsePredictions(raw);
+    expect(set.recorded.get('1000002')?.status).toBe('UNSAFE');
+    expect(set.coverage?.reasons.get('1000003')).toBe('low_rise');
+    expect(set.coverage?.reasons.has('bad')).toBe(false);
+  });
+
+  it('attaches them to unscored footprints only', () => {
+    const set = parsePredictions(raw);
+    const join = joinByBin({ type: 'FeatureCollection', features: [square('1000001'), square('1000002'), square('1000003')] }, set);
+    const byBin = Object.fromEntries(join.features.map((f) => [f.properties.bin, f.properties]));
+    expect(byBin['1000001'].prediction).not.toBeNull();
+    expect(byBin['1000001'].recorded).toBeNull();
+    expect(byBin['1000002'].recorded?.status).toBe('UNSAFE');
+    expect(byBin['1000003'].unscoredReason).toBe('low_rise');
+    expect(join.scored).toHaveLength(1);
   });
 });

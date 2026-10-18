@@ -22,7 +22,8 @@
         "current_cycle_filed": {"type": "boolean"},
         "current_cycle_status": {"enum": ["SAFE", "SWARMP", "UNSAFE", null]},
         "history": {"type": "array", "items": {"type": "object", "required": ["cycle", "status", "filed_on"],
-          "properties": {"cycle": {"type": "integer"}, "status": {"enum": ["SAFE", "SWARMP", "UNSAFE"]}, "filed_on": {"type": ["string", "null"], "format": "date"}}}}
+          "properties": {"cycle": {"type": "integer"}, "status": {"enum": ["SAFE", "SWARMP", "UNSAFE"]}, "filed_on": {"type": ["string", "null"], "format": "date"},
+            "reference": {"type": ["string", "null"], "description": "TR6 report number of the filing (DOB NOW / NYC Open Data xubg-57si)"}}}}
       }
     },
     "prediction": {
