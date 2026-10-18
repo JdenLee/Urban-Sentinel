@@ -1,0 +1,16 @@
+# Upload only the frontend and the one evidence file it imports. Everything else (data/, ml/, venvs) stays local.
+/*
+!/frontend
+!/ml
+/ml/*
+!/ml/reports
+/ml/reports/*
+!/ml/reports/linuxone
+/ml/reports/linuxone/*
+!/ml/reports/linuxone/latency_s390x.json
+# Local env files would bake keys into the public bundle.
+frontend/.env*
+!frontend/.env.example
+frontend/node_modules
+frontend/dist
+frontend/.vercel
